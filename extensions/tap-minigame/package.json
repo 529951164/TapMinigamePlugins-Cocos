@@ -1,0 +1,16 @@
+{
+  "package_version": 2,
+  "name": "tap-minigame",
+  "version": "1.0.0",
+  "description": "Tap小游戏构建插件",
+  "main": "./dist/main.js",
+  "author": "梁栋",
+  "editor": ">=3.0.0",
+  "contributions": {
+    "builder": "./dist/builder.js"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.8",
+    "typescript": "^5.9.3"
+  }
+}
