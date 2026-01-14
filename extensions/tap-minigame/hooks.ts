@@ -1,10 +1,11 @@
 /**
  * Tap小游戏构建钩子
- * 用途：在构建完成后自动调用Python脚本转换
+ * 用途：在构建完成后自动调用TypeScript转换器
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { convertWechatToTap } from './converter-ts';
 
 export async function onBeforeBuild(options: any) {
     console.log('[Tap小游戏] 开始构建微信小游戏...');
@@ -47,65 +48,13 @@ export async function onAfterBuild(options: any, result: any) {
         fs.mkdirSync(tapBuildPath, { recursive: true });
         console.log('[Tap小游戏] 创建TapBuild目录:', tapBuildPath);
 
-        // Python转换脚本路径（扩展内置）
-        const scriptPath = path.join(__dirname, '..', 'converter', 'wx_converter.py');
-        console.log('[Tap小游戏] 转换脚本路径:', scriptPath);
+        console.log('[Tap小游戏] 开始执行TypeScript转换器...');
 
-        // 检查Python脚本是否存在
-        if (!fs.existsSync(scriptPath)) {
-            throw new Error(`Python转换脚本不存在: ${scriptPath}`);
-        }
-
-        console.log('[Tap小游戏] 开始执行转换脚本...');
-        console.log('[Tap小游戏] 命令: python3', scriptPath, '-s', wechatBuildPath, '-t', tapBuildPath);
-
-        // 执行转换脚本
-        const { spawn } = require('child_process');
-        let scriptOutput = '';
-        let hasError = false;
-
-        await new Promise<void>((resolve) => {
-            const childProcess = spawn('python3', [
-                scriptPath,
-                '-s', wechatBuildPath,
-                '-t', tapBuildPath
-            ], {
-                cwd: path.dirname(scriptPath),
-                stdio: ['ignore', 'pipe', 'pipe'],
-                env: process.env
-            });
-
-            console.log('[Tap小游戏] Python进程已启动, PID:', childProcess.pid);
-
-            childProcess.stdout.on('data', (data: Buffer) => {
-                const output = data.toString().trim();
-                if (output) {
-                    scriptOutput += output + '\n';
-                    console.log('[Tap小游戏]', output);
-                }
-            });
-
-            childProcess.stderr.on('data', (data: Buffer) => {
-                const output = data.toString().trim();
-                if (output) {
-                    scriptOutput += output + '\n';
-                    // stderr可能包含npm警告和babel提示，不是真正的错误
-                    console.log('[Tap小游戏]', output);
-                }
-            });
-
-            childProcess.on('close', (code: number) => {
-                console.log('[Tap小游戏] Python脚本退出码:', code);
-                // 不管退出码，总是resolve
-                resolve();
-            });
-
-            childProcess.on('error', (error: Error) => {
-                console.error('[Tap小游戏] Python进程启动失败:', error.message);
-                hasError = true;
-                // 即使有错误也resolve，后面再检查文件
-                resolve();
-            });
+        // 调用TypeScript转换器
+        await convertWechatToTap({
+            source: wechatBuildPath,
+            target: tapBuildPath,
+            useSubpackage: false
         });
 
         console.log('[Tap小游戏] ✅ 转换完成！');
@@ -118,8 +67,7 @@ export async function onAfterBuild(options: any, result: any) {
             console.log('[Tap小游戏] game.zip已生成:', gameZipPath);
             console.log('[Tap小游戏] 文件大小:', sizeMB, 'MB');
         } else {
-            console.warn('[Tap小游戏] ⚠️ game.zip未生成，但game目录存在');
-            console.log('[Tap小游戏] game目录:', path.join(tapBuildPath, 'game'));
+            console.warn('[Tap小游戏] ⚠️ game.zip未生成');
         }
 
         // 不弹出对话框，只在控制台输出
