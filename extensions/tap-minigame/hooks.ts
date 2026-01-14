@@ -21,9 +21,10 @@ export async function onAfterBuild(options: any, result: any) {
     console.log('[Tap小游戏] 微信小游戏构建完成！');
 
     // 检查是否启用了Tap转换
-    const tapOptions = options.packages?.['tap-minigame'];
+    const tapOptions = options.packages?.['taptap-minigame-tools'];
     if (!tapOptions || !tapOptions.enableTapConvert) {
         console.log('[Tap小游戏] 未启用Tap转换，跳过');
+        console.log('[Tap小游戏] 调试信息 - packages:', Object.keys(options.packages || {}));
         return;
     }
 
