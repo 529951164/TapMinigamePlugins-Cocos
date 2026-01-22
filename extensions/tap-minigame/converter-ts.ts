@@ -8,6 +8,10 @@ import * as fs from 'fs-extra';
 import * as path from 'path';
 import archiver from 'archiver';
 import { spawn } from 'child_process';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
 
 const CONVERTER_VERSION = "2.0.4-ts";
 const DEFAULT_COMPANY = "DefaultCompany";
@@ -37,13 +41,16 @@ interface GameConfig {
 }
 
 /**
- * 步骤1: 验证源路径
+ * 步骤2: 验证源路径
  */
 function validateSourcePath(sourcePath: string): void {
+    console.log('[Tap小游戏] 正在验证微信小游戏源路径...');
     if (!fs.existsSync(sourcePath)) {
+        console.error('[Tap小游戏] ❌ 源路径不存在:', sourcePath);
         throw new Error(`源路径不存在: ${sourcePath}`);
     }
-    console.log('[Tap小游戏] ✓ 源路径验证通过:', sourcePath);
+    console.log('[Tap小游戏] ✓ 源路径验证通过');
+    console.log('[Tap小游戏] 源路径:', sourcePath);
 }
 
 /**
@@ -53,6 +60,8 @@ function ensureTargetPath(targetPath: string): string {
     const targetParent = targetPath;
     const gameDir = path.join(targetParent, 'game');
 
+    console.log('[Tap小游戏] 正在准备输出目录...');
+
     // 如果目标目录存在且不为空，先删除
     if (fs.existsSync(targetParent)) {
         console.log('[Tap小游戏] 删除旧的目标目录...');
@@ -61,7 +70,8 @@ function ensureTargetPath(targetPath: string): string {
 
     // 创建目录
     fs.ensureDirSync(gameDir);
-    console.log('[Tap小游戏] ✓ 创建目标目录:', gameDir);
+    console.log('[Tap小游戏] ✓ 目标目录创建成功');
+    console.log('[Tap小游戏] 输出目录:', gameDir);
 
     return gameDir;
 }
@@ -70,7 +80,9 @@ function ensureTargetPath(targetPath: string): string {
  * 步骤3: 复制文件（排除特定文件）
  */
 function copyAssets(source: string, target: string): void {
-    console.log('[Tap小游戏] 复制文件...');
+    console.log('[Tap小游戏] 正在复制微信小游戏文件...');
+    console.log('[Tap小游戏] 源目录:', source);
+    console.log('[Tap小游戏] 目标目录:', target);
 
     // 复制文件，排除 .* __pycache__ *.meta *.bak
     fs.copySync(source, target, {
@@ -201,10 +213,108 @@ function handleUnityPlugin(targetFolder: string, converterDir: string): void {
 }
 
 /**
+ * 检查并安装converter依赖（带重试机制）
+ */
+async function ensureConverterDependencies(converterDir: string): Promise<void> {
+    const nodeModulesPath = path.join(converterDir, 'node_modules');
+    const packageJsonPath = path.join(converterDir, 'package.json');
+
+    console.log('========================================');
+    console.log('[Tap小游戏] 步骤1: 检查转换器依赖');
+    console.log('========================================');
+
+    // 检查node_modules是否存在
+    if (fs.existsSync(nodeModulesPath)) {
+        console.log('[Tap小游戏] ✓ 转换器依赖已安装');
+        console.log('[Tap小游戏] 依赖路径:', nodeModulesPath);
+        return;
+    }
+
+    // 检查package.json是否存在
+    if (!fs.existsSync(packageJsonPath)) {
+        console.error('[Tap小游戏] ❌ 未找到converter/package.json');
+        console.error('[Tap小游戏] 预期路径:', packageJsonPath);
+        throw new Error('转换器配置文件不存在，插件可能未正确安装');
+    }
+
+    console.log('[Tap小游戏] ⚠️  检测到首次使用，需要安装转换器依赖');
+    console.log('[Tap小游戏] 安装目录:', converterDir);
+    console.log('[Tap小游戏] 这可能需要1-2分钟，请耐心等待...');
+    console.log('');
+
+    // 最多重试3次
+    const maxRetries = 3;
+    let lastError: Error | null = null;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            console.log(`[Tap小游戏] 尝试安装依赖 (${attempt}/${maxRetries})...`);
+
+            const { stdout, stderr } = await execAsync('npm install', {
+                cwd: converterDir,
+                maxBuffer: 10 * 1024 * 1024, // 10MB buffer
+                timeout: 120000 // 2分钟超时
+            });
+
+            // 输出安装日志（简化版）
+            if (stdout) {
+                const lines = stdout.split('\n').filter(line => line.trim());
+                if (lines.length > 0) {
+                    console.log('[npm]', lines[lines.length - 1]); // 只显示最后一行
+                }
+            }
+
+            // 验证安装是否成功
+            if (fs.existsSync(nodeModulesPath)) {
+                console.log('[Tap小游戏] ✓ 依赖安装成功！');
+                console.log('[Tap小游戏] 已安装路径:', nodeModulesPath);
+                return;
+            } else {
+                throw new Error('安装完成但node_modules目录未生成');
+            }
+
+        } catch (error: any) {
+            lastError = error;
+            console.error(`[Tap小游戏] ✗ 第${attempt}次安装失败`);
+
+            if (error.code === 'ETIMEDOUT') {
+                console.error('[Tap小游戏] 原因: 安装超时（网络可能较慢）');
+            } else if (error.message) {
+                console.error('[Tap小游戏] 原因:', error.message.split('\n')[0]); // 只显示第一行错误
+            }
+
+            // 如果还有重试机会，等待后重试
+            if (attempt < maxRetries) {
+                console.log('[Tap小游戏] 等待5秒后重试...');
+                await new Promise(resolve => setTimeout(resolve, 5000));
+            }
+        }
+    }
+
+    // 所有重试都失败
+    console.error('');
+    console.error('========================================');
+    console.error('[Tap小游戏] ❌ 依赖安装失败（已重试3次）');
+    console.error('========================================');
+    console.error('[Tap小游戏] 错误详情:', lastError?.message || '未知错误');
+    console.error('[Tap小游戏] ');
+    console.error('[Tap小游戏] 解决方案：');
+    console.error('[Tap小游戏] 1. 检查网络连接是否正常');
+    console.error('[Tap小游戏] 2. 手动在以下目录执行 npm install：');
+    console.error('[Tap小游戏]    ', converterDir);
+    console.error('[Tap小游戏] 3. 或者尝试切换npm镜像源：');
+    console.error('[Tap小游戏]    npm config set registry https://registry.npmmirror.com');
+    console.error('========================================');
+    console.error('');
+
+    throw new Error(`转换器依赖安装失败（已重试${maxRetries}次）。请检查网络连接或手动安装依赖。`);
+}
+
+/**
  * 步骤6: 运行Babel转换
  */
 async function runBabelTransform(targetFolder: string, converterDir: string): Promise<void> {
-    console.log('[Tap小游戏] 运行Babel转换...');
+    console.log('[Tap小游戏] 正在进行JavaScript兼容性转换...');
 
     // 检查是否已经转换过
     const babelDir = path.join(targetFolder, '@babel');
@@ -215,9 +325,9 @@ async function runBabelTransform(targetFolder: string, converterDir: string): Pr
 
     // 执行Babel转换
     const babelrcPath = path.join(converterDir, '.babelrc');
-    const babelCmd = `npx babel --config-file "${babelrcPath}" "${targetFolder}" -d "${targetFolder}"`;
-
-    console.log('[Tap小游戏] 执行Babel命令...');
+    console.log('[Tap小游戏] Babel配置:', babelrcPath);
+    console.log('[Tap小游戏] 转换目录:', targetFolder);
+    console.log('[Tap小游戏] 正在执行转换...');
 
     await new Promise<void>((resolve, reject) => {
         const child = spawn('npx', ['babel', '--config-file', babelrcPath, targetFolder, '-d', targetFolder], {
@@ -225,14 +335,21 @@ async function runBabelTransform(targetFolder: string, converterDir: string): Pr
             stdio: 'pipe'
         });
 
+        let stdoutData = '';
+        let stderrData = '';
+
         child.stdout.on('data', (data) => {
-            const output = data.toString().trim();
-            if (output) console.log('[Babel]', output);
+            const output = data.toString();
+            stdoutData += output;
+            const trimmed = output.trim();
+            if (trimmed) console.log('[Babel]', trimmed);
         });
 
         child.stderr.on('data', (data) => {
-            const output = data.toString().trim();
-            if (output) console.log('[Babel]', output);
+            const output = data.toString();
+            stderrData += output;
+            const trimmed = output.trim();
+            if (trimmed) console.error('[Babel Error]', trimmed);
         });
 
         child.on('close', (code) => {
@@ -240,18 +357,23 @@ async function runBabelTransform(targetFolder: string, converterDir: string): Pr
                 console.log('[Tap小游戏] ✓ Babel转换完成');
                 resolve();
             } else {
-                reject(new Error(`Babel转换失败，退出码: ${code}`));
+                const errorMsg = stderrData || stdoutData || '未知错误';
+                console.error('[Tap小游戏] X 转换失败：');
+                console.error('[Tap小游戏] 错误详情：', errorMsg);
+                reject(new Error(`Babel转换失败（退出码: ${code}）\n${errorMsg}`));
             }
         });
 
         child.on('error', (error) => {
-            reject(error);
+            console.error('[Tap小游戏] X 转换失败：');
+            console.error('[Tap小游戏] 错误详情：', error.message);
+            reject(new Error(`启动Babel进程失败: ${error.message}`));
         });
     });
 }
 
 /**
- * 步骤7: 注入运行时代码到game.js
+ * 步骤8: 注入运行时代码到game.js
  */
 function injectRuntimeCode(targetFolder: string, converterDir: string): void {
     console.log('[Tap小游戏] 注入运行时代码...');
@@ -277,7 +399,7 @@ function injectRuntimeCode(targetFolder: string, converterDir: string): void {
 }
 
 /**
- * 步骤8: 处理wasm-split.js
+ * 步骤9: 处理wasm-split.js
  */
 function handleWasmSplit(targetFolder: string): void {
     console.log('[Tap小游戏] 处理WASM兼容性...');
@@ -320,7 +442,7 @@ function handleWasmSplit(targetFolder: string): void {
 }
 
 /**
- * 步骤9: 处理coverviewCustomized
+ * 步骤10: 处理coverviewCustomized
  */
 function handleCustomizedCoverview(targetFolder: string): void {
     console.log('[Tap小游戏] 处理coverviewCustomized设置...');
@@ -342,7 +464,7 @@ function handleCustomizedCoverview(targetFolder: string): void {
 }
 
 /**
- * 步骤10: 复制check-version.js
+ * 步骤11: 复制check-version.js
  */
 function copyVersionChecker(targetFolder: string, converterDir: string): void {
     console.log('[Tap小游戏] 复制版本检查文件...');
@@ -359,7 +481,7 @@ function copyVersionChecker(targetFolder: string, converterDir: string): void {
 }
 
 /**
- * 步骤11: 打包成ZIP
+ * 步骤12: 打包成ZIP
  */
 async function packGame(targetFolder: string, config: GameConfig, useSubpackage: boolean): Promise<void> {
     console.log('[Tap小游戏] 创建ZIP包...');
@@ -407,52 +529,83 @@ export async function convertWechatToTap(options: ConvertOptions): Promise<void>
     const converterDir = path.join(__dirname, '..', 'converter');
 
     try {
-        // 1. 验证路径
-        console.log('[1/10] 验证路径...');
+        // 1. 检查并安装转换器依赖（必须第一步）
+        await ensureConverterDependencies(converterDir);
+
+        // 2. 验证路径
+        console.log('\n========================================');
+        console.log('[Tap小游戏] 步骤2: 验证源路径');
+        console.log('========================================');
         validateSourcePath(options.source);
         const targetFolder = ensureTargetPath(options.target);
 
-        // 2. 复制文件
-        console.log('\n[2/10] 复制项目文件...');
+        // 3. 复制文件
+        console.log('\n========================================');
+        console.log('[Tap小游戏] 步骤3: 复制项目文件');
+        console.log('========================================');
         copyAssets(options.source, targetFolder);
 
-        // 3. 处理配置
-        console.log('\n[3/10] 处理game.json配置...');
+        // 4. 处理配置
+        console.log('\n========================================');
+        console.log('[Tap小游戏] 步骤4: 处理game.json配置');
+        console.log('========================================');
         const config = handleGameConfig(targetFolder);
 
-        // 4. 复制插件
-        console.log('\n[4/10] 注入插件...');
+        // 5. 复制插件
+        console.log('\n========================================');
+        console.log('[Tap小游戏] 步骤5: 注入插件');
+        console.log('========================================');
         copyPlugins(targetFolder, config, converterDir);
 
-        // 5. Babel转换
-        console.log('\n[5/10] 运行Babel转换...');
+        // 6. Babel转换
+        console.log('\n========================================');
+        console.log('[Tap小游戏] 步骤6: 运行Babel转换');
+        console.log('========================================');
         await runBabelTransform(targetFolder, converterDir);
 
-        // 6. 注入运行时代码
-        console.log('\n[6/10] 注入运行时代码...');
+        // 7. 注入运行时代码
+        console.log('\n========================================');
+        console.log('[Tap小游戏] 步骤7: 注入运行时代码');
+        console.log('========================================');
         injectRuntimeCode(targetFolder, converterDir);
 
-        // 7. 处理WASM
-        console.log('\n[7/10] 处理WASM兼容性...');
+        // 8. 处理WASM
+        console.log('\n========================================');
+        console.log('[Tap小游戏] 步骤8: 处理WASM兼容性');
+        console.log('========================================');
         handleWasmSplit(targetFolder);
 
-        // 8. 处理Coverview
-        console.log('\n[8/10] 处理coverviewCustomized设置...');
+        // 9. 处理Coverview
+        console.log('\n========================================');
+        console.log('[Tap小游戏] 步骤9: 处理coverviewCustomized设置');
+        console.log('========================================');
         handleCustomizedCoverview(targetFolder);
 
-        // 9. 复制版本检查
-        console.log('\n[9/10] 复制版本检查文件...');
+        // 10. 复制版本检查
+        console.log('\n========================================');
+        console.log('[Tap小游戏] 步骤10: 复制版本检查文件');
+        console.log('========================================');
         copyVersionChecker(targetFolder, converterDir);
 
-        // 10. 打包ZIP
-        console.log('\n[10/10] 创建分发包...');
+        // 11. 打包ZIP
+        console.log('\n========================================');
+        console.log('[Tap小游戏] 步骤11: 创建分发包');
+        console.log('========================================');
         await packGame(targetFolder, config, options.useSubpackage || false);
 
-        console.log('\n✅ 转换完成！');
-        console.log('输出目录:', options.target);
+        console.log('\n========================================');
+        console.log('[Tap小游戏] ✅ 转换完成！');
+        console.log('========================================');
+        console.log('[Tap小游戏] 输出目录:', options.target);
+        console.log('[Tap小游戏] game.zip已生成，可以上传到TapTap开发者中心');
+        console.log('========================================\n');
 
     } catch (error: any) {
-        console.error('\n❌ 转换失败:', error.message);
+        console.error('\n========================================');
+        console.error('[Tap小游戏] ❌ 转换失败');
+        console.error('========================================');
+        console.error('[Tap小游戏] 错误信息:', error.message);
+        console.error('========================================\n');
         throw error;
     }
 }
