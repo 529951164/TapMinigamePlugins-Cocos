@@ -1,5 +1,17 @@
 # Tap小游戏插件更新日志
 
+## v1.0.2 (2026-01-23)
+
+### 🐛 修复问题
+- **修复console.error导致构建中断的问题**：在Cocos Creator构建环境中，console.error()会导致构建立即中断，现已改为console.log()输出日志
+- **优化错误处理**：错误信息通过throw Error传递给构建系统，而不是通过console.error()
+- **改进Babel日志输出**：Babel的stderr输出改为console.log()，因为stderr可能只是警告而不是致命错误
+
+### 📝 技术细节
+- 所有console.error()调用已替换为console.log()
+- 保持详细的错误日志输出
+- 避免因为日志输出导致构建意外中断
+
 ## v1.0.1 (2026-01-22)
 
 ### 🐛 修复问题
