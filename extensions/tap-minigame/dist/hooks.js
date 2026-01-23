@@ -42,13 +42,191 @@ exports.onAfterBuild = onAfterBuild;
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const converter_ts_1 = require("./converter-ts");
+const child_process_1 = require("child_process");
+/**
+ * 检查Node.js版本是否兼容
+ */
+function checkNodeVersionCompatibility() {
+    const nodeVersion = process.version; // e.g., "v14.17.0"
+    const majorVersion = parseInt(nodeVersion.split('.')[0].substring(1));
+    if (majorVersion < 12) {
+        return {
+            compatible: false,
+            version: nodeVersion,
+            message: `Node.js版本过低（${nodeVersion}），需要12.0或更高版本。\n\n请升级Cocos Creator到3.8.0或更高版本。`
+        };
+    }
+    return {
+        compatible: true,
+        version: nodeVersion,
+        message: `Node.js版本兼容（${nodeVersion}）`
+    };
+}
+/**
+ * 检查Python环境是否可用
+ */
+async function checkPythonAvailable() {
+    return new Promise((resolve) => {
+        const python = process.platform === 'win32' ? 'python' : 'python3';
+        const child = (0, child_process_1.spawn)(python, ['--version'], { stdio: 'pipe' });
+        let output = '';
+        child.stdout.on('data', (data) => { output += data.toString(); });
+        child.stderr.on('data', (data) => { output += data.toString(); });
+        child.on('close', (code) => {
+            if (code === 0 && output.includes('Python')) {
+                resolve({ available: true, version: output.trim() });
+            }
+            else {
+                resolve({ available: false, version: '' });
+            }
+        });
+        child.on('error', () => {
+            resolve({ available: false, version: '' });
+        });
+        // 超时处理
+        setTimeout(() => {
+            child.kill();
+            resolve({ available: false, version: '' });
+        }, 3000);
+    });
+}
+/**
+ * 构建前环境检查
+ */
+async function checkEnvironment() {
+    console.log('[Tap小游戏] ========================================');
+    console.log('[Tap小游戏] 🔍 开始环境检查...');
+    console.log('[Tap小游戏] ========================================');
+    // 1. 检查Node.js版本
+    const nodeCheck = checkNodeVersionCompatibility();
+    console.log('[Tap小游戏] Node.js版本:', nodeCheck.version);
+    if (!nodeCheck.compatible) {
+        console.log('[Tap小游戏] ❌ Node.js版本不兼容');
+        // 检查是否有Python保底
+        console.log('[Tap小游戏] 检查Python保底方案...');
+        const pythonCheck = await checkPythonAvailable();
+        if (pythonCheck.available) {
+            console.log('[Tap小游戏] ✓ 检测到Python环境:', pythonCheck.version);
+            console.log('[Tap小游戏] 将使用Python脚本作为保底方案');
+            return {
+                ok: true, // 有保底方案，可以继续
+                message: `Node.js版本不兼容，但检测到${pythonCheck.version}，将使用Python脚本进行转换。`,
+                hasPythonFallback: true
+            };
+        }
+        else {
+            console.log('[Tap小游戏] ❌ 未检测到Python环境');
+            return {
+                ok: false,
+                message: nodeCheck.message + '\n\n备选方案：安装Python 3.6+作为保底转换工具。',
+                hasPythonFallback: false
+            };
+        }
+    }
+    console.log('[Tap小游戏] ✓ Node.js版本兼容');
+    // 2. 检查converter目录
+    const converterDir = path.join(__dirname, 'converter');
+    const packageJsonPath = path.join(converterDir, 'package.json');
+    if (!fs.existsSync(packageJsonPath)) {
+        console.log('[Tap小游戏] ❌ 转换器配置文件缺失');
+        return {
+            ok: false,
+            message: '插件安装不完整，缺少转换器配置文件。\n\n请重新安装插件。',
+            hasPythonFallback: false
+        };
+    }
+    console.log('[Tap小游戏] ✓ 转换器配置文件完整');
+    console.log('[Tap小游戏] ========================================');
+    console.log('[Tap小游戏] ✅ 环境检查通过');
+    console.log('[Tap小游戏] ========================================');
+    return {
+        ok: true,
+        message: '环境检查通过',
+        hasPythonFallback: false
+    };
+}
 async function onBeforeBuild(options) {
     console.log('[Tap小游戏] 开始构建微信小游戏...');
     // 检查是否启用了Tap转换
-    const enableTapConvert = options.packages?.['tap-minigame']?.enableTapConvert;
-    if (enableTapConvert) {
-        console.log('[Tap小游戏] 已启用Tap小游戏转换');
+    const tapOptions = options.packages?.['taptap-minigame-tools'];
+    if (!tapOptions || !tapOptions.enableTapConvert) {
+        console.log('[Tap小游戏] 未启用Tap转换，跳过环境检查');
+        return;
     }
+    console.log('[Tap小游戏] 已启用Tap小游戏转换');
+    // ⚠️ 关键：构建前环境检查
+    const envCheck = await checkEnvironment();
+    if (!envCheck.ok) {
+        // 环境不满足，弹窗阻止构建
+        console.log('[Tap小游戏] ❌ 环境检查失败，终止构建');
+        Editor.Dialog.error(envCheck.message, {
+            title: 'Tap小游戏 - 环境检查失败',
+            buttons: ['确定']
+        });
+        // 抛出错误阻止构建继续
+        throw new Error('环境检查失败：' + envCheck.message);
+    }
+    if (envCheck.hasPythonFallback) {
+        // 有Python保底，给用户提示
+        Editor.Dialog.info(envCheck.message, {
+            title: 'Tap小游戏 - 使用保底方案',
+            buttons: ['确定']
+        });
+    }
+}
+/**
+ * 使用Python脚本进行转换（保底方案）
+ */
+async function convertWithPython(wechatBuildPath, tapBuildPath) {
+    console.log('[Tap小游戏] ========================================');
+    console.log('[Tap小游戏] 🐍 使用Python脚本进行转换');
+    console.log('[Tap小游戏] ========================================');
+    const converterDir = path.join(__dirname, 'converter');
+    const pythonScript = path.join(converterDir, 'wx_converter.py');
+    // 检查Python脚本是否存在
+    if (!fs.existsSync(pythonScript)) {
+        throw new Error('Python转换脚本不存在: ' + pythonScript);
+    }
+    const python = process.platform === 'win32' ? 'python' : 'python3';
+    return new Promise((resolve, reject) => {
+        console.log('[Tap小游戏] 执行Python脚本:', pythonScript);
+        console.log('[Tap小游戏] 源路径:', wechatBuildPath);
+        console.log('[Tap小游戏] 目标路径:', tapBuildPath);
+        const child = (0, child_process_1.spawn)(python, [
+            pythonScript,
+            '--source', wechatBuildPath,
+            '--target', tapBuildPath
+        ], {
+            cwd: converterDir,
+            stdio: 'pipe'
+        });
+        let stdout = '';
+        let stderr = '';
+        child.stdout.on('data', (data) => {
+            const output = data.toString();
+            stdout += output;
+            console.log('[Python]', output.trim());
+        });
+        child.stderr.on('data', (data) => {
+            const output = data.toString();
+            stderr += output;
+            console.log('[Python]', output.trim());
+        });
+        child.on('close', (code) => {
+            if (code === 0) {
+                console.log('[Tap小游戏] ✓ Python转换完成');
+                resolve();
+            }
+            else {
+                console.log('[Tap小游戏] ✗ Python转换失败，退出码:', code);
+                reject(new Error(`Python转换失败（退出码: ${code}）\n${stderr || stdout}`));
+            }
+        });
+        child.on('error', (error) => {
+            console.log('[Tap小游戏] ✗ Python脚本执行失败:', error.message);
+            reject(new Error(`Python脚本执行失败: ${error.message}`));
+        });
+    });
 }
 async function onAfterBuild(options, result) {
     console.log('[Tap小游戏] 微信小游戏构建完成！');
@@ -75,34 +253,77 @@ async function onAfterBuild(options, result) {
         // 创建新的TapBuild目录
         fs.mkdirSync(tapBuildPath, { recursive: true });
         console.log('[Tap小游戏] 创建TapBuild目录:', tapBuildPath);
-        console.log('[Tap小游戏] 开始执行TypeScript转换器...');
-        // 调用TypeScript转换器
-        await (0, converter_ts_1.convertWechatToTap)({
-            source: wechatBuildPath,
-            target: tapBuildPath,
-            useSubpackage: false
-        });
-        console.log('[Tap小游戏] ✅ 转换完成！');
-        // 验证zip文件是否生成
-        const gameZipPath = path.join(tapBuildPath, 'game.zip');
-        if (fs.existsSync(gameZipPath)) {
-            const stats = fs.statSync(gameZipPath);
-            const sizeMB = (stats.size / 1024 / 1024).toFixed(2);
-            console.log('[Tap小游戏] game.zip已生成:', gameZipPath);
-            console.log('[Tap小游戏] 文件大小:', sizeMB, 'MB');
+        let conversionSuccess = false;
+        let tsError = null;
+        // 尝试1: 使用TypeScript转换器
+        try {
+            console.log('[Tap小游戏] ========================================');
+            console.log('[Tap小游戏] 📦 尝试使用TypeScript转换器...');
+            console.log('[Tap小游戏] ========================================');
+            await (0, converter_ts_1.convertWechatToTap)({
+                source: wechatBuildPath,
+                target: tapBuildPath,
+                useSubpackage: false
+            });
+            conversionSuccess = true;
+            console.log('[Tap小游戏] ✅ TypeScript转换器执行成功');
         }
-        else {
-            console.warn('[Tap小游戏] ⚠️ game.zip未生成');
+        catch (error) {
+            tsError = error;
+            console.log('[Tap小游戏] ========================================');
+            console.log('[Tap小游戏] ⚠️  TypeScript转换器执行失败');
+            console.log('[Tap小游戏] ========================================');
+            console.log('[Tap小游戏] 错误信息:', error.message);
+            // 尝试2: 使用Python保底方案
+            try {
+                console.log('[Tap小游戏] 🔄 切换到Python保底方案...');
+                await convertWithPython(wechatBuildPath, tapBuildPath);
+                conversionSuccess = true;
+                console.log('[Tap小游戏] ✅ Python保底方案执行成功');
+            }
+            catch (pythonError) {
+                console.log('[Tap小游戏] ❌ Python保底方案也失败了');
+                console.log('[Tap小游戏] Python错误:', pythonError.message);
+                // 两种方案都失败，抛出详细错误
+                throw new Error(`转换失败！\n\n` +
+                    `TypeScript转换器错误：\n${error.message}\n\n` +
+                    `Python保底方案错误：\n${pythonError.message}`);
+            }
         }
-        // 不弹出对话框，只在控制台输出
+        if (conversionSuccess) {
+            console.log('[Tap小游戏] ========================================');
+            console.log('[Tap小游戏] ✅ 转换完成！');
+            console.log('[Tap小游戏] ========================================');
+            // 验证zip文件是否生成
+            const gameZipPath = path.join(tapBuildPath, 'game.zip');
+            if (fs.existsSync(gameZipPath)) {
+                const stats = fs.statSync(gameZipPath);
+                const sizeMB = (stats.size / 1024 / 1024).toFixed(2);
+                console.log('[Tap小游戏] game.zip已生成:', gameZipPath);
+                console.log('[Tap小游戏] 文件大小:', sizeMB, 'MB');
+            }
+            else {
+                console.log('[Tap小游戏] ⚠️  game.zip未生成');
+            }
+            // 如果使用了Python保底方案，给用户提示
+            if (tsError) {
+                Editor.Dialog.info('TypeScript转换器失败，已自动使用Python保底方案完成转换。\n\n建议升级Cocos Creator以获得更好的性能。', {
+                    title: 'Tap小游戏 - 使用了保底方案',
+                    buttons: ['确定']
+                });
+            }
+        }
     }
     catch (error) {
-        console.error('[Tap小游戏] ❌ 转换失败:', error);
-        console.error('[Tap小游戏] 错误详情:', error.message);
-        // 只在真正失败时弹出简短提示
-        Editor.Dialog.error('Tap小游戏转换失败，请查看控制台日志', {
+        console.log('[Tap小游戏] ========================================');
+        console.log('[Tap小游戏] ❌ 转换失败');
+        console.log('[Tap小游戏] ========================================');
+        console.log('[Tap小游戏] 错误详情:', error.message);
+        // 弹出错误提示
+        Editor.Dialog.error('转换失败，请查看控制台日志获取详细信息。\n\n' + error.message, {
             title: 'Tap小游戏',
             buttons: ['确定']
         });
+        throw error;
     }
 }
