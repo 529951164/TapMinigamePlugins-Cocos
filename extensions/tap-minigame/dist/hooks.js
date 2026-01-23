@@ -114,7 +114,9 @@ async function checkPythonAvailable() {
     });
 }
 /**
- * 构建前环境检查
+ * 构建前环境检查（轻量级）
+ * 注意：不检查文件完整性，因为__dirname在钩子中不可靠
+ * 文件完整性会在转换时检查
  */
 async function checkEnvironment() {
     console.log('[Tap小游戏] ========================================');
@@ -124,41 +126,31 @@ async function checkEnvironment() {
     const nodeCheck = checkNodeVersionCompatibility();
     console.log('[Tap小游戏] Node.js版本:', nodeCheck.version);
     if (!nodeCheck.compatible) {
-        console.log('[Tap小游戏] ❌ Node.js版本不兼容');
+        console.log('[Tap小游戏] ⚠️  Node.js版本较低（建议12.0+）');
         // 检查是否有Python保底
         console.log('[Tap小游戏] 检查Python保底方案...');
         const pythonCheck = await checkPythonAvailable();
         if (pythonCheck.available) {
             console.log('[Tap小游戏] ✓ 检测到Python环境:', pythonCheck.version);
-            console.log('[Tap小游戏] 将使用Python脚本作为保底方案');
+            console.log('[Tap小游戏] 如果TypeScript转换失败，将自动使用Python保底方案');
             return {
                 ok: true, // 有保底方案，可以继续
-                message: `Node.js版本不兼容，但检测到${pythonCheck.version}，将使用Python脚本进行转换。`,
+                message: `Node.js版本较低，但检测到${pythonCheck.version}作为保底方案。`,
                 hasPythonFallback: true
             };
         }
         else {
-            console.log('[Tap小游戏] ❌ 未检测到Python环境');
+            console.log('[Tap小游戏] ⚠️  未检测到Python环境');
+            console.log('[Tap小游戏] 如果转换失败，建议安装Python 3.6+作为保底方案');
+            // 注意：即使没有Python，也让它继续（转换时可能成功）
             return {
-                ok: false,
-                message: nodeCheck.message + '\n\n备选方案：安装Python 3.6+作为保底转换工具。',
+                ok: true, // 继续构建，转换时再看
+                message: nodeCheck.message,
                 hasPythonFallback: false
             };
         }
     }
     console.log('[Tap小游戏] ✓ Node.js版本兼容');
-    // 2. 检查converter目录
-    const converterDir = path.join(__dirname, 'converter');
-    const packageJsonPath = path.join(converterDir, 'package.json');
-    if (!fs.existsSync(packageJsonPath)) {
-        console.log('[Tap小游戏] ❌ 转换器配置文件缺失');
-        return {
-            ok: false,
-            message: '插件安装不完整，缺少转换器配置文件。\n\n请重新安装插件。',
-            hasPythonFallback: false
-        };
-    }
-    console.log('[Tap小游戏] ✓ 转换器配置文件完整');
     console.log('[Tap小游戏] ========================================');
     console.log('[Tap小游戏] ✅ 环境检查通过');
     console.log('[Tap小游戏] ========================================');
