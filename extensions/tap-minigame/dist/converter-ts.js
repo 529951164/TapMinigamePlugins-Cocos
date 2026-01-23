@@ -203,6 +203,23 @@ function handleUnityPlugin(targetFolder, converterDir) {
     console.log('  ✓ 复制UnityPlugin');
 }
 /**
+ * 检查Node.js版本兼容性
+ */
+function checkNodeVersion() {
+    const nodeVersion = process.version; // e.g., "v14.17.0"
+    const majorVersion = parseInt(nodeVersion.split('.')[0].substring(1));
+    console.log('[Tap小游戏] Node.js版本:', nodeVersion);
+    if (majorVersion < 12) {
+        console.log('[Tap小游戏] ⚠️  警告：Node.js版本过低');
+        console.log('[Tap小游戏] 当前版本:', nodeVersion);
+        console.log('[Tap小游戏] 最低要求: Node.js 12+');
+        console.log('[Tap小游戏] 建议升级Cocos Creator到最新版本');
+    }
+    else {
+        console.log('[Tap小游戏] ✓ Node.js版本兼容');
+    }
+}
+/**
  * 检查并安装converter依赖（带重试机制）
  */
 async function ensureConverterDependencies(converterDir) {
@@ -211,6 +228,8 @@ async function ensureConverterDependencies(converterDir) {
     console.log('========================================');
     console.log('[Tap小游戏] 步骤1: 检查转换器依赖');
     console.log('========================================');
+    // 检查Node.js版本
+    checkNodeVersion();
     // 检查node_modules是否存在
     if (fs.existsSync(nodeModulesPath)) {
         console.log('[Tap小游戏] ✓ 转换器依赖已安装');
