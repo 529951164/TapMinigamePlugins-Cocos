@@ -60,7 +60,7 @@ let COVERVIEW_CUSTOMIZED = false;
 function validateSourcePath(sourcePath) {
     console.log('[Tap小游戏] 正在验证微信小游戏源路径...');
     if (!fs.existsSync(sourcePath)) {
-        console.error('[Tap小游戏] ❌ 源路径不存在:', sourcePath);
+        console.log('[Tap小游戏] ❌ 源路径不存在:', sourcePath);
         throw new Error(`源路径不存在: ${sourcePath}`);
     }
     console.log('[Tap小游戏] ✓ 源路径验证通过');
@@ -219,8 +219,8 @@ async function ensureConverterDependencies(converterDir) {
     }
     // 检查package.json是否存在
     if (!fs.existsSync(packageJsonPath)) {
-        console.error('[Tap小游戏] ❌ 未找到converter/package.json');
-        console.error('[Tap小游戏] 预期路径:', packageJsonPath);
+        console.log('[Tap小游戏] ❌ 未找到converter/package.json');
+        console.log('[Tap小游戏] 预期路径:', packageJsonPath);
         throw new Error('转换器配置文件不存在，插件可能未正确安装');
     }
     console.log('[Tap小游戏] ⚠️  检测到首次使用，需要安装转换器依赖');
@@ -257,12 +257,12 @@ async function ensureConverterDependencies(converterDir) {
         }
         catch (error) {
             lastError = error;
-            console.error(`[Tap小游戏] ✗ 第${attempt}次安装失败`);
+            console.log(`[Tap小游戏] ✗ 第${attempt}次安装失败`);
             if (error.code === 'ETIMEDOUT') {
-                console.error('[Tap小游戏] 原因: 安装超时（网络可能较慢）');
+                console.log('[Tap小游戏] 原因: 安装超时（网络可能较慢）');
             }
             else if (error.message) {
-                console.error('[Tap小游戏] 原因:', error.message.split('\n')[0]); // 只显示第一行错误
+                console.log('[Tap小游戏] 原因:', error.message.split('\n')[0]); // 只显示第一行错误
             }
             // 如果还有重试机会，等待后重试
             if (attempt < maxRetries) {
@@ -272,20 +272,20 @@ async function ensureConverterDependencies(converterDir) {
         }
     }
     // 所有重试都失败
-    console.error('');
-    console.error('========================================');
-    console.error('[Tap小游戏] ❌ 依赖安装失败（已重试3次）');
-    console.error('========================================');
-    console.error('[Tap小游戏] 错误详情:', lastError?.message || '未知错误');
-    console.error('[Tap小游戏] ');
-    console.error('[Tap小游戏] 解决方案：');
-    console.error('[Tap小游戏] 1. 检查网络连接是否正常');
-    console.error('[Tap小游戏] 2. 手动在以下目录执行 npm install：');
-    console.error('[Tap小游戏]    ', converterDir);
-    console.error('[Tap小游戏] 3. 或者尝试切换npm镜像源：');
-    console.error('[Tap小游戏]    npm config set registry https://registry.npmmirror.com');
-    console.error('========================================');
-    console.error('');
+    console.log('');
+    console.log('========================================');
+    console.log('[Tap小游戏] ❌ 依赖安装失败（已重试3次）');
+    console.log('========================================');
+    console.log('[Tap小游戏] 错误详情:', lastError?.message || '未知错误');
+    console.log('[Tap小游戏] ');
+    console.log('[Tap小游戏] 解决方案：');
+    console.log('[Tap小游戏] 1. 检查网络连接是否正常');
+    console.log('[Tap小游戏] 2. 手动在以下目录执行 npm install：');
+    console.log('[Tap小游戏]    ', converterDir);
+    console.log('[Tap小游戏] 3. 或者尝试切换npm镜像源：');
+    console.log('[Tap小游戏]    npm config set registry https://registry.npmmirror.com');
+    console.log('========================================');
+    console.log('');
     throw new Error(`转换器依赖安装失败（已重试${maxRetries}次）。请检查网络连接或手动安装依赖。`);
 }
 /**
@@ -322,8 +322,10 @@ async function runBabelTransform(targetFolder, converterDir) {
             const output = data.toString();
             stderrData += output;
             const trimmed = output.trim();
+            // 不要使用console.error，因为在Cocos Creator中会导致构建中断
+            // Babel的stderr可能只是警告，不一定是错误
             if (trimmed)
-                console.error('[Babel Error]', trimmed);
+                console.log('[Babel stderr]', trimmed);
         });
         child.on('close', (code) => {
             if (code === 0) {
@@ -332,14 +334,14 @@ async function runBabelTransform(targetFolder, converterDir) {
             }
             else {
                 const errorMsg = stderrData || stdoutData || '未知错误';
-                console.error('[Tap小游戏] X 转换失败：');
-                console.error('[Tap小游戏] 错误详情：', errorMsg);
+                console.log('[Tap小游戏] X 转换失败：');
+                console.log('[Tap小游戏] 错误详情：', errorMsg);
                 reject(new Error(`Babel转换失败（退出码: ${code}）\n${errorMsg}`));
             }
         });
         child.on('error', (error) => {
-            console.error('[Tap小游戏] X 转换失败：');
-            console.error('[Tap小游戏] 错误详情：', error.message);
+            console.log('[Tap小游戏] X 转换失败：');
+            console.log('[Tap小游戏] 错误详情：', error.message);
             reject(new Error(`启动Babel进程失败: ${error.message}`));
         });
     });
@@ -529,11 +531,11 @@ async function convertWechatToTap(options) {
         console.log('========================================\n');
     }
     catch (error) {
-        console.error('\n========================================');
-        console.error('[Tap小游戏] ❌ 转换失败');
-        console.error('========================================');
-        console.error('[Tap小游戏] 错误信息:', error.message);
-        console.error('========================================\n');
+        console.log('\n========================================');
+        console.log('[Tap小游戏] ❌ 转换失败');
+        console.log('========================================');
+        console.log('[Tap小游戏] 错误信息:', error.message);
+        console.log('========================================\n');
         throw error;
     }
 }
