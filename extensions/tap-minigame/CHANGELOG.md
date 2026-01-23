@@ -4,13 +4,21 @@
 
 ### 🐛 修复问题
 - **修复console.error导致构建中断的问题**：在Cocos Creator构建环境中，console.error()会导致构建立即中断，现已改为console.log()输出日志
+- **修复Cocos 3.8.1兼容性问题**：降级Babel版本以兼容旧版Node.js，解决"Cannot find module 'node:url'"错误
 - **优化错误处理**：错误信息通过throw Error传递给构建系统，而不是通过console.error()
 - **改进Babel日志输出**：Babel的stderr输出改为console.log()，因为stderr可能只是警告而不是致命错误
 
 ### 📝 技术细节
 - 所有console.error()调用已替换为console.log()
+- 降级Babel从7.24.6到7.17.10（兼容Node.js 12+）
+- 移除'node:'前缀语法依赖
 - 保持详细的错误日志输出
 - 避免因为日志输出导致构建意外中断
+
+### ✅ 兼容性
+- Cocos Creator 3.8.1 ✓
+- Cocos Creator 3.8.8 ✓
+- Node.js 12+ ✓
 
 ## v1.0.1 (2026-01-22)
 
