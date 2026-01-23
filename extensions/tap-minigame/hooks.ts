@@ -35,30 +35,49 @@ function checkNodeVersionCompatibility(): { compatible: boolean; version: string
  */
 async function checkPythonAvailable(): Promise<{ available: boolean; version: string }> {
     return new Promise((resolve) => {
-        const python = process.platform === 'win32' ? 'python' : 'python3';
-        const child = spawn(python, ['--version'], { stdio: 'pipe' });
+        try {
+            const python = process.platform === 'win32' ? 'python' : 'python3';
+            const child = spawn(python, ['--version'], { stdio: 'pipe' });
 
-        let output = '';
-        child.stdout.on('data', (data) => { output += data.toString(); });
-        child.stderr.on('data', (data) => { output += data.toString(); });
+            let output = '';
+            let resolved = false;
 
-        child.on('close', (code) => {
-            if (code === 0 && output.includes('Python')) {
-                resolve({ available: true, version: output.trim() });
-            } else {
+            child.stdout.on('data', (data) => { output += data.toString(); });
+            child.stderr.on('data', (data) => { output += data.toString(); });
+
+            child.on('close', (code) => {
+                if (resolved) return;
+                resolved = true;
+                if (code === 0 && output.includes('Python')) {
+                    resolve({ available: true, version: output.trim() });
+                } else {
+                    resolve({ available: false, version: '' });
+                }
+            });
+
+            child.on('error', (error) => {
+                if (resolved) return;
+                resolved = true;
+                console.log('[Tap小游戏] Python检测出错:', error.message);
                 resolve({ available: false, version: '' });
-            }
-        });
+            });
 
-        child.on('error', () => {
+            // 超时处理
+            setTimeout(() => {
+                if (resolved) return;
+                resolved = true;
+                try {
+                    child.kill();
+                } catch (e) {
+                    // 忽略kill错误
+                }
+                resolve({ available: false, version: '' });
+            }, 3000);
+        } catch (error: any) {
+            // spawn本身可能失败
+            console.log('[Tap小游戏] Python检测失败:', error.message);
             resolve({ available: false, version: '' });
-        });
-
-        // 超时处理
-        setTimeout(() => {
-            child.kill();
-            resolve({ available: false, version: '' });
-        }, 3000);
+        }
     });
 }
 
@@ -127,39 +146,48 @@ async function checkEnvironment(): Promise<{ ok: boolean; message: string; hasPy
 }
 
 export async function onBeforeBuild(options: any) {
-    console.log('[Tap小游戏] 开始构建微信小游戏...');
+    try {
+        console.log('[Tap小游戏] 开始构建微信小游戏...');
 
-    // 检查是否启用了Tap转换
-    const tapOptions = options.packages?.['taptap-minigame-tools'];
-    if (!tapOptions || !tapOptions.enableTapConvert) {
-        console.log('[Tap小游戏] 未启用Tap转换，跳过环境检查');
-        return;
-    }
+        // 检查是否启用了Tap转换
+        const tapOptions = options.packages?.['taptap-minigame-tools'];
+        if (!tapOptions || !tapOptions.enableTapConvert) {
+            console.log('[Tap小游戏] 未启用Tap转换，跳过环境检查');
+            return;
+        }
 
-    console.log('[Tap小游戏] 已启用Tap小游戏转换');
+        console.log('[Tap小游戏] 已启用Tap小游戏转换');
 
-    // ⚠️ 关键：构建前环境检查
-    const envCheck = await checkEnvironment();
+        // ⚠️ 关键：构建前环境检查
+        try {
+            const envCheck = await checkEnvironment();
 
-    if (!envCheck.ok) {
-        // 环境不满足，弹窗阻止构建
-        console.log('[Tap小游戏] ❌ 环境检查失败，终止构建');
+            if (!envCheck.ok) {
+                // 环境不满足，记录警告（不阻止构建，在转换时处理）
+                console.log('[Tap小游戏] ========================================');
+                console.log('[Tap小游戏] ⚠️  环境检查警告');
+                console.log('[Tap小游戏] ========================================');
+                console.log('[Tap小游戏]', envCheck.message);
+                console.log('[Tap小游戏] ========================================');
+                console.log('[Tap小游戏] 将继续构建，但转换可能失败');
+                console.log('[Tap小游戏] 请查看上述警告信息并安装必要的环境');
+                console.log('[Tap小游戏] ========================================');
+            } else if (envCheck.hasPythonFallback) {
+                // 有Python保底，记录信息
+                console.log('[Tap小游戏] ⚠️ ', envCheck.message);
+            } else {
+                console.log('[Tap小游戏] ✓ 环境检查通过');
+            }
+        } catch (checkError: any) {
+            // 环境检查本身出错，记录但不阻止构建
+            console.log('[Tap小游戏] ⚠️  环境检查遇到错误:', checkError.message);
+            console.log('[Tap小游戏] 将继续构建，如果转换失败会自动尝试Python保底方案');
+        }
 
-        Editor.Dialog.error(envCheck.message, {
-            title: 'Tap小游戏 - 环境检查失败',
-            buttons: ['确定']
-        });
-
-        // 抛出错误阻止构建继续
-        throw new Error('环境检查失败：' + envCheck.message);
-    }
-
-    if (envCheck.hasPythonFallback) {
-        // 有Python保底，给用户提示
-        Editor.Dialog.info(envCheck.message, {
-            title: 'Tap小游戏 - 使用保底方案',
-            buttons: ['确定']
-        });
+    } catch (error: any) {
+        // 最外层捕获，确保不会因为钩子失败导致构建崩溃
+        console.log('[Tap小游戏] onBeforeBuild钩子执行出错:', error.message);
+        console.log('[Tap小游戏] 将继续构建，但可能需要手动处理转换');
     }
 }
 
