@@ -21,12 +21,14 @@ class ConverterConfig:
         self._setup_arguments()
         
     def _setup_arguments(self):
-        self.parser.add_argument('--source', '-s', required=True, 
+        self.parser.add_argument('--source', '-s', required=True,
                                help='Path to source directory')
         self.parser.add_argument('--target', '-t', required=True,
                                help='Path to target directory')
         self.parser.add_argument('--subpackage', '-sp', nargs='?', const='true', type=str.lower,
                                help='Pack main and subpackages separately')
+        self.parser.add_argument('--force', '-f', action='store_true',
+                               help='Force overwrite without confirmation')
 
 
 def copy_cached_plugins(source, target):
@@ -66,9 +68,9 @@ def validate_source_path(path: str) -> Path:
         raise FileNotFoundError(f"Source path does not exist: {path}")
     return path_obj
 
-def ensure_target_path(path: str) -> Path:
+def ensure_target_path(path: str, force: bool = False) -> Path:
     """Create target path if needed with confirmation"""
-    
+
     # Check if on Windows and path contains reserved names
     if sys.platform == 'win32' or sys.platform == 'win64':
         parts = path.split('\\')
@@ -82,25 +84,27 @@ def ensure_target_path(path: str) -> Path:
         path_obj = Path(path).resolve()
     except Exception as e:
         raise ValueError(f"Fail to create target path. Please use a different path.") from e
-    
+
     if path_obj.exists() and any(path_obj.iterdir()):
-        response = input(f"Target directory {path_obj} is not empty. Continue? [y/N] ").lower()
-        if response != 'y':
-            print("Operation cancelled by user")
-            sys.exit(0)
+        if not force:
+            response = input(f"Target directory {path_obj} is not empty. Continue? [y/N] ").lower()
+            if response != 'y':
+                print("Operation cancelled by user")
+                sys.exit(0)
         print("Removing existing directory...")
         shutil.rmtree(path_obj)
     path_obj.mkdir(parents=True, exist_ok=True)
     return path_obj
 
-def copy_assets(source: Path, target: Path) -> None:
+def copy_assets(source: Path, target: Path, force: bool = False) -> None:
     """Copy assets with overwrite confirmation"""
     if target.exists():
-        print(f"Found existing directory: {target}")
-        response = input(f"Target directory {target} exists. Overwrite? [y/N] ").lower()
-        if response != 'y':
-            print("Operation cancelled by user")
-            sys.exit(0)
+        if not force:
+            print(f"Found existing directory: {target}")
+            response = input(f"Target directory {target} exists. Overwrite? [y/N] ").lower()
+            if response != 'y':
+                print("Operation cancelled by user")
+                sys.exit(0)
         print("Removing existing directory...")
         shutil.rmtree(target)
     
@@ -323,11 +327,12 @@ def process_unity_project(args) -> None:
     
     print("\n[1/10] Validating paths...")
     source = validate_source_path(args.source)
-    target_parent = ensure_target_path(args.target)
+    force = getattr(args, 'force', False)
+    target_parent = ensure_target_path(args.target, force=force)
     target = target_parent / 'game'
-    
+
     print("\n[2/10] Copying project files...")
-    copy_assets(source, target)
+    copy_assets(source, target, force=force)
     
     print("\n[3/10] Processing game configuration...")
     config = handle_game_config(target)
