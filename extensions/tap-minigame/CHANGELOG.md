@@ -10,6 +10,11 @@
   - ✅ 零失败风险
   - ✅ 跨平台完全兼容（Windows、macOS、Linux）
 
+- **修复Windows解压乱码问题**：
+  - 重命名 `环境检查说明.md` → `ENVIRONMENT_CHECK.md`
+  - 避免Windows解压时因中文文件名导致乱码
+  - 确保插件能在Windows上正常导入
+
 ### ✨ 新增功能
 - **强制使用Python脚本选项**：在构建面板新增复选框"强制使用Python脚本"
   - 方便开发者测试Python脚本是否正常工作
