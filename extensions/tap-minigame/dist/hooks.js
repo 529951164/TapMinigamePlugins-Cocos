@@ -211,7 +211,8 @@ async function convertWithPython(wechatBuildPath, tapBuildPath) {
     console.log('[Tap小游戏] ========================================');
     console.log('[Tap小游戏] 🐍 使用Python脚本进行转换');
     console.log('[Tap小游戏] ========================================');
-    const converterDir = path.join(__dirname, 'converter');
+    // 修正路径：__dirname在编译后指向dist目录，需要回到上层
+    const converterDir = path.join(__dirname, '..', 'converter');
     const pythonScript = path.join(converterDir, 'wx_converter.py');
     // 检查Python脚本是否存在
     if (!fs.existsSync(pythonScript)) {

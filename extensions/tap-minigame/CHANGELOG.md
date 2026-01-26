@@ -1,5 +1,63 @@
 # Tap小游戏插件更新日志
 
+## v1.0.5 (2026-01-26)
+
+### 🐛 紧急修复（Windows兼容性）
+
+#### 问题1：spawn npx ENOENT（影响所有Windows用户）
+**现象**：
+```
+启动Babel进程失败: spawn npx ENOENT
+TypeScript转换器完全失效
+```
+
+**原因**：
+- Windows上npx命令是`npx.cmd`，不是`npx`
+- 使用spawn('npx')在Windows上会报ENOENT错误
+
+**修复**：
+```typescript
+// ❌ 之前
+spawn('npx', ['babel', ...])
+
+// ✅ 现在
+const babelPath = path.join(converterDir, 'node_modules', '.bin', 'babel');
+const babelCmd = isWindows ? babelPath + '.cmd' : babelPath;
+spawn(babelCmd, [...], { shell: isWindows })
+```
+
+#### 问题2：Python保底方案路径错误（影响所有用户）
+**现象**：
+```
+Python转换脚本不存在: D:\...\dist\converter\wx_converter.py
+                              ^^^^
+```
+
+**原因**：
+- hooks.ts编译到dist目录后，`__dirname`指向`dist/`
+- `path.join(__dirname, 'converter')` 变成了 `dist/converter/`
+- 但Python脚本实际在 `converter/` 目录
+
+**修复**：
+```typescript
+// ❌ 之前
+const converterDir = path.join(__dirname, 'converter');
+
+// ✅ 现在
+const converterDir = path.join(__dirname, '..', 'converter');
+```
+
+### 📝 技术细节
+- 直接调用本地安装的babel（node_modules/.bin/babel）
+- Windows使用.cmd后缀和shell模式
+- 修正所有使用__dirname的路径计算
+- Python脚本已包含在插件包中
+
+### ✅ 测试环境
+- Windows 10/11 ✓
+- macOS ✓
+- Node.js 12+ ✓
+
 ## v1.0.4 (2026-01-23)
 
 ### 🐛 紧急修复
