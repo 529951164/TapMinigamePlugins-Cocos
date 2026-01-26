@@ -223,70 +223,8 @@ export async function onBeforeBuild(options: any) {
     console.log('[Tap小游戏] 准备构建微信小游戏');
 }
 
-/**
- * 使用Python脚本进行转换（保底方案）
- */
-async function convertWithPython(wechatBuildPath: string, tapBuildPath: string): Promise<void> {
-    console.log('[Tap小游戏] ========================================');
-    console.log('[Tap小游戏] 🐍 使用Python脚本进行转换');
-    console.log('[Tap小游戏] ========================================');
-
-    // 修正路径：__dirname在编译后指向dist目录，需要回到上层
-    const converterDir = path.join(__dirname, '..', 'converter');
-    const pythonScript = path.join(converterDir, 'wx_converter.py');
-
-    // 检查Python脚本是否存在
-    if (!fs.existsSync(pythonScript)) {
-        throw new Error('Python转换脚本不存在: ' + pythonScript);
-    }
-
-    const python = process.platform === 'win32' ? 'python' : 'python3';
-
-    return new Promise((resolve, reject) => {
-        console.log('[Tap小游戏] 执行Python脚本:', pythonScript);
-        console.log('[Tap小游戏] 源路径:', wechatBuildPath);
-        console.log('[Tap小游戏] 目标路径:', tapBuildPath);
-
-        const child = spawn(python, [
-            pythonScript,
-            '--source', wechatBuildPath,
-            '--target', tapBuildPath
-        ], {
-            cwd: converterDir,
-            stdio: 'pipe'
-        });
-
-        let stdout = '';
-        let stderr = '';
-
-        child.stdout.on('data', (data) => {
-            const output = data.toString();
-            stdout += output;
-            console.log('[Python]', output.trim());
-        });
-
-        child.stderr.on('data', (data) => {
-            const output = data.toString();
-            stderr += output;
-            console.log('[Python]', output.trim());
-        });
-
-        child.on('close', (code) => {
-            if (code === 0) {
-                console.log('[Tap小游戏] ✓ Python转换完成');
-                resolve();
-            } else {
-                console.log('[Tap小游戏] ✗ Python转换失败，退出码:', code);
-                reject(new Error(`Python转换失败（退出码: ${code}）\n${stderr || stdout}`));
-            }
-        });
-
-        child.on('error', (error) => {
-            console.log('[Tap小游戏] ✗ Python脚本执行失败:', error.message);
-            reject(new Error(`Python脚本执行失败: ${error.message}`));
-        });
-    });
-}
+// Python相关代码已完全移除
+// 只保留强制使用Python的选项（用户主动勾选时才使用）
 
 export async function onAfterBuild(options: any, result: any) {
     console.log('[Tap小游戏] 微信小游戏构建完成！');
@@ -320,84 +258,29 @@ export async function onAfterBuild(options: any, result: any) {
         fs.mkdirSync(tapBuildPath, { recursive: true });
         console.log('[Tap小游戏] 创建TapBuild目录:', tapBuildPath);
 
-        let conversionSuccess = false;
-        let tsError: Error | null = null;
+        // 注意："强制使用Python脚本"选项已移除
+        // 只使用TypeScript转换器
+        console.log('[Tap小游戏] ========================================');
+        console.log('[Tap小游戏] 📦 使用TypeScript转换器');
+        console.log('[Tap小游戏] ========================================');
 
-        // 检查用户是否强制使用Python脚本
-        const usePythonScript = tapOptions.usePythonScript;
+        await convertWechatToTap({
+            source: wechatBuildPath,
+            target: tapBuildPath,
+            useSubpackage: false
+        });
 
-        if (usePythonScript) {
-            // 用户选择强制使用Python脚本
-            console.log('[Tap小游戏] ========================================');
-            console.log('[Tap小游戏] 🐍 用户选择：强制使用Python脚本');
-            console.log('[Tap小游戏] ========================================');
-
-            try {
-                await convertWithPython(wechatBuildPath, tapBuildPath);
-                conversionSuccess = true;
-                console.log('[Tap小游戏] ✅ Python脚本执行成功');
-            } catch (pythonError: any) {
-                console.log('[Tap小游戏] ❌ Python脚本执行失败');
-                console.log('[Tap小游戏] Python错误:', pythonError.message);
-                throw new Error(`Python转换失败：\n${pythonError.message}`);
-            }
-
-        } else {
-            // 默认：先尝试TypeScript转换器，失败则自动降级到Python
-
-            // 尝试1: 使用TypeScript转换器
-            try {
-                console.log('[Tap小游戏] ========================================');
-                console.log('[Tap小游戏] 📦 尝试使用TypeScript转换器...');
-                console.log('[Tap小游戏] ========================================');
-
-                await convertWechatToTap({
-                    source: wechatBuildPath,
-                    target: tapBuildPath,
-                    useSubpackage: false
-                });
-
-                conversionSuccess = true;
-                console.log('[Tap小游戏] ✅ TypeScript转换器执行成功');
-
-            } catch (error: any) {
-                tsError = error;
-                console.log('[Tap小游戏] ========================================');
-                console.log('[Tap小游戏] ⚠️  TypeScript转换器执行失败');
-                console.log('[Tap小游戏] ========================================');
-                console.log('[Tap小游戏] 错误信息:', error.message);
-
-                // 尝试2: 使用Python保底方案
-                try {
-                    console.log('[Tap小游戏] 🔄 切换到Python保底方案...');
-
-                    await convertWithPython(wechatBuildPath, tapBuildPath);
-
-                    conversionSuccess = true;
-                    console.log('[Tap小游戏] ✅ Python保底方案执行成功');
-
-                } catch (pythonError: any) {
-                    console.log('[Tap小游戏] ❌ Python保底方案也失败了');
-                    console.log('[Tap小游戏] Python错误:', pythonError.message);
-
-                    // 两种方案都失败，抛出详细错误
-                    throw new Error(
-                        `转换失败！\n\n` +
-                        `TypeScript转换器错误：\n${error.message}\n\n` +
-                        `Python保底方案错误：\n${pythonError.message}`
-                    );
-                }
-            }
-        }
+        console.log('[Tap小游戏] ✅ TypeScript转换器执行成功');
 
         // 验证zip文件是否生成
+        console.log('[Tap小游戏] ========================================');
+        console.log('[Tap小游戏] ✅ 转换完成！');
+        console.log('[Tap小游戏] ========================================');
+
         const gameZipPath = path.join(tapBuildPath, 'game.zip');
         if (fs.existsSync(gameZipPath)) {
             const stats = fs.statSync(gameZipPath);
             const sizeMB = (stats.size / 1024 / 1024).toFixed(2);
-            console.log('[Tap小游戏] ========================================');
-            console.log('[Tap小游戏] ✅ 转换完成！');
-            console.log('[Tap小游戏] ========================================');
             console.log('[Tap小游戏] game.zip已生成:', gameZipPath);
             console.log('[Tap小游戏] 文件大小:', sizeMB, 'MB');
         } else {

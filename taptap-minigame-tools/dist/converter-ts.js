@@ -324,6 +324,7 @@ async function runBabelTransform(targetFolder, converterDir) {
     console.log('[Tap小游戏] 转换目录:', targetFolder);
     console.log('[Tap小游戏] 正在执行转换...');
     // 使用本地安装的babel-cli（兼容Windows）
+    // 使用.bin/babel（已经是真实文件，不是软链接）
     const babelPath = path.join(converterDir, 'node_modules', '.bin', 'babel');
     const isWindows = process.platform === 'win32';
     const babelCmd = isWindows ? babelPath + '.cmd' : babelPath;
@@ -332,7 +333,7 @@ async function runBabelTransform(targetFolder, converterDir) {
         const child = (0, child_process_1.spawn)(babelCmd, ['--config-file', babelrcPath, targetFolder, '-d', targetFolder], {
             cwd: converterDir,
             stdio: 'pipe',
-            shell: isWindows // Windows需要shell
+            shell: isWindows
         });
         let stdoutData = '';
         let stderrData = '';
