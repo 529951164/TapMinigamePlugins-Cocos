@@ -2,6 +2,12 @@
 
 ## v1.0.5 (2026-01-26)
 
+### ✨ 新增功能
+- **强制使用Python脚本选项**：在构建面板新增复选框"强制使用Python脚本"
+  - 方便开发者测试Python脚本是否正常工作
+  - 绕过TypeScript转换器，直接使用Python保底方案
+  - 适用场景：调试、测试、或TypeScript转换器有问题时
+
 ### 🐛 紧急修复（Windows兼容性）
 
 #### 问题1：spawn npx ENOENT（影响所有Windows用户）

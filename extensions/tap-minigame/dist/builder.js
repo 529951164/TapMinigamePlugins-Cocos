@@ -28,6 +28,14 @@ exports.configs = {
                     },
                 },
             },
+            usePythonScript: {
+                label: '强制使用Python脚本',
+                description: '跳过TypeScript转换器，直接使用Python脚本（需要本地安装Python 3.6+）',
+                default: false,
+                render: {
+                    ui: 'ui-checkbox',
+                },
+            },
         },
     },
 };

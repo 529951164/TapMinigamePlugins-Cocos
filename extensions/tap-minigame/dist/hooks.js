@@ -286,39 +286,60 @@ async function onAfterBuild(options, result) {
         console.log('[Tap小游戏] 创建TapBuild目录:', tapBuildPath);
         let conversionSuccess = false;
         let tsError = null;
-        // 尝试1: 使用TypeScript转换器
-        try {
+        // 检查用户是否强制使用Python脚本
+        const usePythonScript = tapOptions.usePythonScript;
+        if (usePythonScript) {
+            // 用户选择强制使用Python脚本
             console.log('[Tap小游戏] ========================================');
-            console.log('[Tap小游戏] 📦 尝试使用TypeScript转换器...');
+            console.log('[Tap小游戏] 🐍 用户选择：强制使用Python脚本');
             console.log('[Tap小游戏] ========================================');
-            await (0, converter_ts_1.convertWechatToTap)({
-                source: wechatBuildPath,
-                target: tapBuildPath,
-                useSubpackage: false
-            });
-            conversionSuccess = true;
-            console.log('[Tap小游戏] ✅ TypeScript转换器执行成功');
-        }
-        catch (error) {
-            tsError = error;
-            console.log('[Tap小游戏] ========================================');
-            console.log('[Tap小游戏] ⚠️  TypeScript转换器执行失败');
-            console.log('[Tap小游戏] ========================================');
-            console.log('[Tap小游戏] 错误信息:', error.message);
-            // 尝试2: 使用Python保底方案
             try {
-                console.log('[Tap小游戏] 🔄 切换到Python保底方案...');
                 await convertWithPython(wechatBuildPath, tapBuildPath);
                 conversionSuccess = true;
-                console.log('[Tap小游戏] ✅ Python保底方案执行成功');
+                console.log('[Tap小游戏] ✅ Python脚本执行成功');
             }
             catch (pythonError) {
-                console.log('[Tap小游戏] ❌ Python保底方案也失败了');
+                console.log('[Tap小游戏] ❌ Python脚本执行失败');
                 console.log('[Tap小游戏] Python错误:', pythonError.message);
-                // 两种方案都失败，抛出详细错误
-                throw new Error(`转换失败！\n\n` +
-                    `TypeScript转换器错误：\n${error.message}\n\n` +
-                    `Python保底方案错误：\n${pythonError.message}`);
+                throw new Error(`Python转换失败：\n${pythonError.message}`);
+            }
+        }
+        else {
+            // 默认：先尝试TypeScript转换器，失败则自动降级到Python
+            // 尝试1: 使用TypeScript转换器
+            try {
+                console.log('[Tap小游戏] ========================================');
+                console.log('[Tap小游戏] 📦 尝试使用TypeScript转换器...');
+                console.log('[Tap小游戏] ========================================');
+                await (0, converter_ts_1.convertWechatToTap)({
+                    source: wechatBuildPath,
+                    target: tapBuildPath,
+                    useSubpackage: false
+                });
+                conversionSuccess = true;
+                console.log('[Tap小游戏] ✅ TypeScript转换器执行成功');
+            }
+            catch (error) {
+                tsError = error;
+                console.log('[Tap小游戏] ========================================');
+                console.log('[Tap小游戏] ⚠️  TypeScript转换器执行失败');
+                console.log('[Tap小游戏] ========================================');
+                console.log('[Tap小游戏] 错误信息:', error.message);
+                // 尝试2: 使用Python保底方案
+                try {
+                    console.log('[Tap小游戏] 🔄 切换到Python保底方案...');
+                    await convertWithPython(wechatBuildPath, tapBuildPath);
+                    conversionSuccess = true;
+                    console.log('[Tap小游戏] ✅ Python保底方案执行成功');
+                }
+                catch (pythonError) {
+                    console.log('[Tap小游戏] ❌ Python保底方案也失败了');
+                    console.log('[Tap小游戏] Python错误:', pythonError.message);
+                    // 两种方案都失败，抛出详细错误
+                    throw new Error(`转换失败！\n\n` +
+                        `TypeScript转换器错误：\n${error.message}\n\n` +
+                        `Python保底方案错误：\n${pythonError.message}`);
+                }
             }
         }
         if (conversionSuccess) {
