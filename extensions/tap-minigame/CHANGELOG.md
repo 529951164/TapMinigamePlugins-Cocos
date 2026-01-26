@@ -2,11 +2,26 @@
 
 ## v1.0.5 (2026-01-26)
 
+### 🎉 重大改进
+- **集成所有依赖**：插件包现已包含完整的node_modules（压缩后6.6MB）
+  - ✅ 开发者无需安装任何环境
+  - ✅ 解压即用，无需等待npm install
+  - ✅ 无需网络连接
+  - ✅ 零失败风险
+  - ✅ 跨平台完全兼容（Windows、macOS、Linux）
+
 ### ✨ 新增功能
 - **强制使用Python脚本选项**：在构建面板新增复选框"强制使用Python脚本"
   - 方便开发者测试Python脚本是否正常工作
   - 绕过TypeScript转换器，直接使用Python保底方案
   - 适用场景：调试、测试、或TypeScript转换器有问题时
+
+- **完整的环境检查**：
+  - 检查Node.js版本
+  - 检查package.json完整性
+  - 检查node_modules是否存在
+  - 检查babel命令是否可用（Windows检查babel.cmd）
+  - 检查Python保底方案可用性
 
 ### 🐛 紧急修复（Windows兼容性）
 

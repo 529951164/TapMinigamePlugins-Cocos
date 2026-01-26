@@ -114,9 +114,52 @@ async function checkPythonAvailable() {
     });
 }
 /**
- * 构建前环境检查（轻量级）
- * 注意：不检查文件完整性，因为__dirname在钩子中不可靠
- * 文件完整性会在转换时检查
+ * 检查转换器依赖是否完整
+ */
+function checkConverterDependencies() {
+    // 修正路径：__dirname在编译后指向dist/，需要回到上层
+    const converterDir = path.join(__dirname, '..', 'converter');
+    const nodeModulesPath = path.join(converterDir, 'node_modules');
+    const packageJsonPath = path.join(converterDir, 'package.json');
+    const babelPath = path.join(nodeModulesPath, '.bin', 'babel');
+    console.log('[Tap小游戏] 检查转换器依赖...');
+    console.log('[Tap小游戏] converter目录:', converterDir);
+    // 检查package.json
+    if (!fs.existsSync(packageJsonPath)) {
+        console.log('[Tap小游戏] ✗ package.json不存在');
+        return {
+            ok: false,
+            message: '插件安装不完整，缺少converter/package.json。\n请重新安装插件。'
+        };
+    }
+    console.log('[Tap小游戏] ✓ package.json存在');
+    // 检查node_modules
+    if (!fs.existsSync(nodeModulesPath)) {
+        console.log('[Tap小游戏] ✗ node_modules不存在');
+        return {
+            ok: false,
+            message: '转换器依赖未安装。\n\n首次使用会自动安装，请稍候1-2分钟。\n如果安装失败，请检查网络连接。'
+        };
+    }
+    console.log('[Tap小游戏] ✓ node_modules存在');
+    // 检查babel命令（Windows检查.cmd，其他检查普通文件）
+    const isWindows = process.platform === 'win32';
+    const babelCmdPath = isWindows ? babelPath + '.cmd' : babelPath;
+    if (!fs.existsSync(babelCmdPath)) {
+        console.log('[Tap小游戏] ✗ babel命令不存在:', babelCmdPath);
+        return {
+            ok: false,
+            message: 'Babel转换工具未安装。\n\n首次使用会自动安装，请稍候1-2分钟。'
+        };
+    }
+    console.log('[Tap小游戏] ✓ babel命令存在');
+    return {
+        ok: true,
+        message: '转换器依赖完整'
+    };
+}
+/**
+ * 构建前环境检查（完整版）
  */
 async function checkEnvironment() {
     console.log('[Tap小游戏] ========================================');
@@ -125,39 +168,63 @@ async function checkEnvironment() {
     // 1. 检查Node.js版本
     const nodeCheck = checkNodeVersionCompatibility();
     console.log('[Tap小游戏] Node.js版本:', nodeCheck.version);
+    // 2. 检查转换器依赖
+    const depsCheck = checkConverterDependencies();
+    // 3. 检查Python保底方案
+    console.log('[Tap小游戏] 检查Python保底方案...');
+    const pythonCheck = await checkPythonAvailable();
+    if (pythonCheck.available) {
+        console.log('[Tap小游戏] ✓ 检测到Python环境:', pythonCheck.version);
+    }
+    else {
+        console.log('[Tap小游戏] - 未检测到Python环境');
+    }
+    // 综合判断
     if (!nodeCheck.compatible) {
         console.log('[Tap小游戏] ⚠️  Node.js版本较低（建议12.0+）');
-        // 检查是否有Python保底
-        console.log('[Tap小游戏] 检查Python保底方案...');
-        const pythonCheck = await checkPythonAvailable();
         if (pythonCheck.available) {
-            console.log('[Tap小游戏] ✓ 检测到Python环境:', pythonCheck.version);
             console.log('[Tap小游戏] 如果TypeScript转换失败，将自动使用Python保底方案');
             return {
-                ok: true, // 有保底方案，可以继续
+                ok: true,
                 message: `Node.js版本较低，但检测到${pythonCheck.version}作为保底方案。`,
                 hasPythonFallback: true
             };
         }
         else {
-            console.log('[Tap小游戏] ⚠️  未检测到Python环境');
-            console.log('[Tap小游戏] 如果转换失败，建议安装Python 3.6+作为保底方案');
-            // 注意：即使没有Python，也让它继续（转换时可能成功）
             return {
-                ok: true, // 继续构建，转换时再看
+                ok: true, // 仍然让它继续，转换时可能成功
                 message: nodeCheck.message,
                 hasPythonFallback: false
             };
         }
     }
+    if (!depsCheck.ok) {
+        console.log('[Tap小游戏] ⚠️  转换器依赖不完整');
+        if (pythonCheck.available) {
+            console.log('[Tap小游戏] 检测到Python环境，可作为保底方案');
+            return {
+                ok: true,
+                message: `转换器依赖不完整，但检测到${pythonCheck.version}作为保底方案。\n\n${depsCheck.message}`,
+                hasPythonFallback: true
+            };
+        }
+        else {
+            return {
+                ok: true, // 让它继续，首次使用会自动安装依赖
+                message: depsCheck.message,
+                hasPythonFallback: false
+            };
+        }
+    }
     console.log('[Tap小游戏] ✓ Node.js版本兼容');
+    console.log('[Tap小游戏] ✓ 转换器依赖完整');
     console.log('[Tap小游戏] ========================================');
     console.log('[Tap小游戏] ✅ 环境检查通过');
     console.log('[Tap小游戏] ========================================');
     return {
         ok: true,
         message: '环境检查通过',
-        hasPythonFallback: false
+        hasPythonFallback: pythonCheck.available
     };
 }
 async function onBeforeBuild(options) {
