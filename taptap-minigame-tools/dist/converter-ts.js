@@ -308,6 +308,36 @@ async function ensureConverterDependencies(converterDir) {
     throw new Error(`转换器依赖安装失败（已重试${maxRetries}次）。请检查网络连接或手动安装依赖。`);
 }
 /**
+ * 确保babel命令有执行权限
+ */
+function ensureBabelExecutable(babelPath) {
+    try {
+        // 检查文件是否存在
+        if (!fs.existsSync(babelPath)) {
+            console.log('[Tap小游戏] ⚠️  babel文件不存在:', babelPath);
+            return;
+        }
+        // 获取当前权限
+        const stats = fs.statSync(babelPath);
+        const mode = stats.mode;
+        // 检查是否有执行权限（所有者、组、其他用户任一有x权限）
+        const hasExecutePermission = (mode & 0o111) !== 0;
+        if (!hasExecutePermission) {
+            console.log('[Tap小游戏] ⚠️  babel文件缺少执行权限，正在修复...');
+            // 添加执行权限：755 (rwxr-xr-x)
+            fs.chmodSync(babelPath, 0o755);
+            console.log('[Tap小游戏] ✓ 已添加执行权限');
+        }
+        else {
+            console.log('[Tap小游戏] ✓ babel文件权限正常');
+        }
+    }
+    catch (error) {
+        console.log('[Tap小游戏] ⚠️  权限检查失败:', error.message);
+        // 不抛出错误，继续尝试执行
+    }
+}
+/**
  * 步骤6: 运行Babel转换
  */
 async function runBabelTransform(targetFolder, converterDir) {
@@ -322,13 +352,16 @@ async function runBabelTransform(targetFolder, converterDir) {
     const babelrcPath = path.join(converterDir, '.babelrc');
     console.log('[Tap小游戏] Babel配置:', babelrcPath);
     console.log('[Tap小游戏] 转换目录:', targetFolder);
-    console.log('[Tap小游戏] 正在执行转换...');
     // 使用本地安装的babel-cli（兼容Windows）
-    // 使用.bin/babel（已经是真实文件，不是软链接）
     const babelPath = path.join(converterDir, 'node_modules', '.bin', 'babel');
     const isWindows = process.platform === 'win32';
     const babelCmd = isWindows ? babelPath + '.cmd' : babelPath;
     console.log('[Tap小游戏] Babel命令:', babelCmd);
+    // 检查并修复babel执行权限（非Windows系统）
+    if (!isWindows) {
+        ensureBabelExecutable(babelCmd);
+    }
+    console.log('[Tap小游戏] 正在执行转换...');
     await new Promise((resolve, reject) => {
         const child = (0, child_process_1.spawn)(babelCmd, ['--config-file', babelrcPath, targetFolder, '-d', targetFolder], {
             cwd: converterDir,
