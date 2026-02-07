@@ -290,6 +290,26 @@ async function onAfterBuild(options, result) {
         else {
             console.log('[Tap小游戏] ⚠️  game.zip未生成');
         }
+        // 检查是否需要删除微信小游戏包
+        if (tapOptions.deleteWechatBuild) {
+            console.log('[Tap小游戏] ========================================');
+            console.log('[Tap小游戏] 🗑️  删除微信小游戏包...');
+            console.log('[Tap小游戏] ========================================');
+            try {
+                if (fs.existsSync(wechatBuildPath)) {
+                    console.log('[Tap小游戏] 删除目录:', wechatBuildPath);
+                    fs.rmSync(wechatBuildPath, { recursive: true, force: true });
+                    console.log('[Tap小游戏] ✅ 微信小游戏包已删除');
+                }
+                else {
+                    console.log('[Tap小游戏] ⚠️  微信小游戏目录不存在，跳过删除');
+                }
+            }
+            catch (deleteError) {
+                console.log('[Tap小游戏] ⚠️  删除微信小游戏包失败:', deleteError.message);
+                console.log('[Tap小游戏] 可以手动删除目录:', wechatBuildPath);
+            }
+        }
     }
     catch (error) {
         console.log('[Tap小游戏] ========================================');

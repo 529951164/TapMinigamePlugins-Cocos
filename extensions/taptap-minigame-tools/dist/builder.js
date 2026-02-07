@@ -36,6 +36,14 @@ exports.configs = {
                     ui: 'ui-checkbox',
                 },
             },
+            deleteWechatBuild: {
+                label: '删除微信小游戏包',
+                description: '转换完成后自动删除微信小游戏目录（只保留Tap小游戏包）',
+                default: false,
+                render: {
+                    ui: 'ui-checkbox',
+                },
+            },
         },
     },
 };
