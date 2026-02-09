@@ -211,16 +211,48 @@ async function checkEnvironment(): Promise<{ ok: boolean; message: string; hasPy
 }
 
 export async function onBeforeBuild(options: any) {
-    // 注意：环境检查已完全屏蔽
-    // 原因：所有依赖已集成到插件包中（14MB），无需检查系统环境
-    // 插件包包含：
-    // 1. 主插件依赖：fs-extra、archiver
-    // 2. 转换器依赖：Babel工具链
-    // 3. Python保底脚本：wx_converter.py
-    //
-    // 如果有任何问题，会在转换时准确报告
-
     console.log('[Tap小游戏] 准备构建微信小游戏');
+
+    // 检查是否启用了Tap转换，未启用则跳过后续检查
+    const tapOptions = options.packages?.['taptap-minigame-tools'];
+    if (!tapOptions || !tapOptions.enableTapConvert) {
+        return;
+    }
+
+    // 引擎版本检查
+    try {
+        const editorVersion: string = Editor.App.version; // e.g., "3.8.4"
+        console.log('[Tap小游戏] Cocos Creator版本:', editorVersion);
+
+        const parts = editorVersion.split('.');
+        const major = parseInt(parts[0]) || 0;
+        const minor = parseInt(parts[1]) || 0;
+
+        if (major < 3 || (major === 3 && minor < 8)) {
+            console.log('[Tap小游戏] ⚠️  检测到低版本Cocos Creator:', editorVersion);
+            const result = await Editor.Dialog.warn(
+                `当前Cocos Creator版本为 ${editorVersion}，本插件推荐 3.8.0 及以上版本。\n\n低版本可能存在兼容性问题，是否继续构建？`,
+                {
+                    title: 'Tap小游戏 - 版本提示',
+                    buttons: ['继续构建', '取消构建'],
+                    default: 1,
+                    cancel: 1,
+                }
+            );
+            // result.response: 0=继续构建, 1=取消构建
+            if (result.response === 1) {
+                throw new Error('用户取消构建：Cocos Creator版本过低');
+            }
+            console.log('[Tap小游戏] 用户选择继续构建');
+        }
+    } catch (error: any) {
+        // 如果是用户主动取消，直接抛出
+        if (error.message?.includes('用户取消构建')) {
+            throw error;
+        }
+        // 其他错误（如 Editor.App.version 不存在）只记录日志
+        console.log('[Tap小游戏] 版本检查跳过:', error.message);
+    }
 }
 
 // Python相关代码已完全移除
@@ -264,10 +296,18 @@ export async function onAfterBuild(options: any, result: any) {
         console.log('[Tap小游戏] 📦 使用TypeScript转换器');
         console.log('[Tap小游戏] ========================================');
 
+        // 版本号三段式格式校验
+        let gameVersion = tapOptions.gameVersion || '0.0.1';
+        if (!/^\d+\.\d+\.\d+$/.test(gameVersion)) {
+            console.log(`[Tap小游戏] ⚠️  版本号格式不正确: "${gameVersion}"，已使用默认值 0.0.1`);
+            gameVersion = '0.0.1';
+        }
+
         await convertWechatToTap({
             source: wechatBuildPath,
             target: tapBuildPath,
-            useSubpackage: false
+            useSubpackage: false,
+            gameVersion: gameVersion,
         });
 
         console.log('[Tap小游戏] ✅ TypeScript转换器执行成功');
@@ -284,7 +324,7 @@ export async function onAfterBuild(options: any, result: any) {
             console.log('[Tap小游戏] game.zip已生成:', gameZipPath);
             console.log('[Tap小游戏] 文件大小:', sizeMB, 'MB');
         } else {
-            console.log('[Tap小游戏] ⚠️  game.zip未生成');
+            throw new Error('game.zip未生成，转换可能已失败，请检查上方日志');
         }
 
         // 检查是否需要删除微信小游戏包
@@ -325,3 +365,8 @@ export async function onAfterBuild(options: any, result: any) {
         throw error;
     }
 }
+
+/**
+ * 告知Cocos构建系统：hook抛出异常时立即停止构建
+ */
+export const throwError = true;

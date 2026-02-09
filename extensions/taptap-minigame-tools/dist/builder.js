@@ -28,6 +28,17 @@ exports.configs = {
                     },
                 },
             },
+            gameVersion: {
+                label: '游戏版本号',
+                description: '游戏版本号（三段式格式，如 1.0.0）',
+                default: '0.0.1',
+                render: {
+                    ui: 'ui-input',
+                    attributes: {
+                        placeholder: '请输入版本号，如 1.0.0',
+                    },
+                },
+            },
             usePythonScript: {
                 label: '强制使用Python脚本',
                 description: '跳过TypeScript转换器，直接使用Python脚本（需要本地安装Python 3.6+）',

@@ -24,6 +24,7 @@ interface ConvertOptions {
     source: string;      // 微信小游戏路径
     target: string;      // Tap小游戏输出路径
     useSubpackage?: boolean;  // 是否分包
+    gameVersion?: string;     // 游戏版本号（三段式，如 1.0.0）
 }
 
 interface GameConfig {
@@ -103,7 +104,7 @@ function copyAssets(source: string, target: string): void {
 /**
  * 步骤4: 处理game.json配置
  */
-function handleGameConfig(targetFolder: string): GameConfig {
+function handleGameConfig(targetFolder: string, gameVersion?: string): GameConfig {
     console.log('[Tap小游戏] 处理game.json配置...');
 
     let configPath = path.join(targetFolder, 'game.json');
@@ -119,10 +120,8 @@ function handleGameConfig(targetFolder: string): GameConfig {
     // 读取配置
     const config: GameConfig = fs.readJsonSync(configPath);
 
-    // 更新配置
-    config.companyName = DEFAULT_COMPANY;
-    config.productName = DEFAULT_PRODUCT;
-    config.productVersion = DEFAULT_VERSION;
+    // 更新配置（保留原始的 companyName 和 productName）
+    config.productVersion = gameVersion || DEFAULT_VERSION;
     config.convertScriptVersion = CONVERTER_VERSION;
 
     // 记录coverviewCustomized设置
@@ -619,7 +618,7 @@ export async function convertWechatToTap(options: ConvertOptions): Promise<void>
         console.log('\n========================================');
         console.log('[Tap小游戏] 步骤4: 处理game.json配置');
         console.log('========================================');
-        const config = handleGameConfig(targetFolder);
+        const config = handleGameConfig(targetFolder, options.gameVersion);
 
         // 5. 复制插件
         console.log('\n========================================');

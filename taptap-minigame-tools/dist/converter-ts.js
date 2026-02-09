@@ -112,7 +112,7 @@ function copyAssets(source, target) {
 /**
  * 步骤4: 处理game.json配置
  */
-function handleGameConfig(targetFolder) {
+function handleGameConfig(targetFolder, gameVersion) {
     console.log('[Tap小游戏] 处理game.json配置...');
     let configPath = path.join(targetFolder, 'game.json');
     // 如果game.json不存在，尝试manifest.json
@@ -124,10 +124,8 @@ function handleGameConfig(targetFolder) {
     }
     // 读取配置
     const config = fs.readJsonSync(configPath);
-    // 更新配置
-    config.companyName = DEFAULT_COMPANY;
-    config.productName = DEFAULT_PRODUCT;
-    config.productVersion = DEFAULT_VERSION;
+    // 更新配置（保留原始的 companyName 和 productName）
+    config.productVersion = gameVersion || DEFAULT_VERSION;
     config.convertScriptVersion = CONVERTER_VERSION;
     // 记录coverviewCustomized设置
     COVERVIEW_CUSTOMIZED = config.coverviewCustomized || false;
@@ -546,7 +544,7 @@ async function convertWechatToTap(options) {
         console.log('\n========================================');
         console.log('[Tap小游戏] 步骤4: 处理game.json配置');
         console.log('========================================');
-        const config = handleGameConfig(targetFolder);
+        const config = handleGameConfig(targetFolder, options.gameVersion);
         // 5. 复制插件
         console.log('\n========================================');
         console.log('[Tap小游戏] 步骤5: 注入插件');

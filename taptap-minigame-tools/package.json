@@ -1,11 +1,11 @@
 {
   "package_version": 2,
   "name": "taptap-minigame-tools",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "一键构建微信小游戏并自动转换为Tap小游戏格式",
   "main": "./dist/main.js",
   "author": "TapTap",
-  "editor": ">=3.0.0",
+  "editor": ">=3.8.0",
   "contributions": {
     "builder": "./dist/builder.js"
   },
