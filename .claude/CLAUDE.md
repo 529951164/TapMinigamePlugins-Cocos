@@ -17,18 +17,27 @@ TapTap小游戏 Cocos Creator 构建插件的开发和测试项目。
 修改 `.ts` 源码后，需要编译才能在 Cocos Creator 中生效：
 
 ```bash
-cd /Volumes/Q/cocos/UIDemo/extensions/taptap-minigame-tools && npx tsc
+cd /Volumes/Q/cocos/UIDemo/extensions/taptap-minigame-tools && node node_modules/typescript/bin/tsc
 ```
 
 ### 打包分发 ZIP
 
-从 `extensions/` 目录打包，输出到项目根目录：
+使用插件内置的打包脚本，自动完成编译 + 打包：
 
 ```bash
-cd /Volumes/Q/cocos/UIDemo/extensions && zip -r ../taptap-minigame-tools-v<版本号>.zip taptap-minigame-tools/ -x "*.DS_Store" "*/node_modules/.cache/*" "*/logs/*"
+cd /Volumes/Q/cocos/UIDemo/extensions/taptap-minigame-tools && bash build.sh
 ```
 
-版本号从 `extensions/taptap-minigame-tools/package.json` 的 `version` 字段读取。
+脚本会自动从 `package.json` 读取版本号，输出到 `extensions/` 上级目录：`taptap-minigame-tools-v{版本号}.zip`。
+
+### 更新类型定义
+
+全量 tap API 类型定义的生成脚本在 `/Volumes/Q/MiniGame/TapSDK/generate_tap_dts.py`，生成后需手动复制到插件目录：
+
+```bash
+python3 /Volumes/Q/MiniGame/TapSDK/generate_tap_dts.py
+cp /Volumes/Q/MiniGame/TapSDK/tap-minigame.d.ts extensions/taptap-minigame-tools/tap-minigame.d.ts
+```
 
 ## 目录说明
 
@@ -50,3 +59,6 @@ cd /Volumes/Q/cocos/UIDemo/extensions && zip -r ../taptap-minigame-tools-v<版�
 | `main.ts` | 插件主入口 |
 | `converter/` | Babel 转换器 + 内置依赖 |
 | `dist/` | TS 编译输出，Cocos 加载此目录 |
+| `tap-minigame.d.ts` | tap API 全量类型定义（约 135 个 API） |
+| `ai-skills/` | AI Skills 文件（SDK/广告/云存档） |
+| `build.sh` | 一键编译+打包脚本 |

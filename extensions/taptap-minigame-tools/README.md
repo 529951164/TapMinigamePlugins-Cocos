@@ -90,7 +90,51 @@
 - 详细的检查日志输出
 - 准确的警告和建议
 
+## tap API 类型定义
+
+插件自带完整的 `tap.*` API 类型定义，安装插件后**零配置**即可使用：
+
+- 在任意 `.ts` 文件中输入 `tap.` 即可获得代码补全
+- 覆盖所有 API：基础、分享、广告、成就、排行榜、云存档
+- 原理：类型定义文件在插件目录中，TypeScript 自动扫描识别
+
+## AI Skills
+
+插件内置 AI Skills 文件，位于 `ai-skills/` 目录，可配合 AI 编程工具快速生成 SDK 适配层代码：
+
+- `tap-sdk-skill.md` → SDK 基础模块（平台检测、登录、分享、排行榜、成就）
+- `tap-ad-skill.md` → 广告模块（激励视频、插屏、Banner）
+- `tap-cloud-save-skill.md` → 云存档模块
+
+## 插件开发
+
+### 编译
+
+```bash
+cd extensions/taptap-minigame-tools
+node node_modules/typescript/bin/tsc
+```
+
+### 打包发布
+
+```bash
+cd extensions/taptap-minigame-tools
+bash build.sh
+```
+
+自动完成：编译 TypeScript → 删旧 ZIP → 打包新 ZIP。版本号从 `package.json` 自动读取，输出到上级目录。
+
+### 更新类型定义
+
+全量 tap API 类型定义由 Python 脚本生成：
+
+```bash
+python3 /Volumes/Q/MiniGame/TapSDK/generate_tap_dts.py
+```
+
+生成后复制到插件目录，再执行 `bash build.sh` 打包。
+
 ## 技术支持
 
 开发者：TapTap
-版本：1.0.0
+版本：1.2.0

@@ -1,5 +1,49 @@
 # Tap小游戏插件更新日志
 
+## v1.2.0 (2026-03-23)
+
+### 新增功能
+
+#### 1. tap API 全量类型定义（零配置，约 135 个 API）
+- 新增 `tap-minigame.d.ts`，为 `tap.*` 提供完整类型声明
+- 使用 `interface TapAPI` + `declare var tap` 方式声明，支持两种用法：
+  - 直接全局调用：`tap.showToast(...)` 有完整提示
+  - import 后调用：`import { tap } from "Global"` 后 `tap.showToast(...)` 同样有提示
+- 覆盖全部 API 分类：
+  - 开放接口：登录、用户信息、授权、分享、成就、排行榜、多人联机、云存档、设置、隐私、桌面文件夹、账号信息
+  - 广告：激励视频、Banner、插屏、格子广告、原生模板广告
+  - 界面：Toast、Loading、Modal、ActionSheet、菜单按钮、状态栏、窗口
+  - 数据缓存：Storage 全套同步/异步 API
+  - 跳转：小程序互跳、重启
+  - 文件系统：FileSystemManager 全套读写操作
+  - 设备：剪贴板、网络状态、振动、屏幕、键盘、加速度计、电池、内存、触摸事件、扫码
+  - 网络：request、downloadFile、uploadFile、WebSocket
+  - 基础：生命周期（onShow/onHide）、系统信息、子包加载、更新管理
+  - 渲染：Canvas、字体、帧率、图像
+  - 媒体：图片、音频（InnerAudioContext）、录音、视频
+  - 位置：模糊定位
+- 配套 Manager 接口类型完整声明：TapAchievementManager、TapLeaderboardManager、TapCloudSaveManager、TapFileSystemManager、TapInnerAudioContext、TapUpdateManager、TapRecorderManager、TapVideo、TapSocketTask 等
+- 类型定义生成脚本：`/Volumes/Q/MiniGame/TapSDK/generate_tap_dts.py`
+
+#### 2. AI Skills
+- 新增 `ai-skills/` 目录，内置 3 个 AI 编程辅助文档：
+  - `tap-sdk-skill.md` → SDK 基础模块生成指南（平台检测、登录、分享、排行榜、成就）
+  - `tap-ad-skill.md` → 广告模块生成指南（激励视频、插屏、Banner）
+  - `tap-cloud-save-skill.md` → 云存档模块生成指南
+- Skills 中的项目特定值（广告ID、分享模板ID等）使用 TODO 占位符，适配任意项目
+
+#### 3. 打包脚本
+- 新增 `build.sh`，一键完成编译 + 打包：
+  - 自动从 `package.json` 读取版本号
+  - 编译 TypeScript → 删旧 ZIP → 打包新 ZIP
+  - 自动排除 `.ts` 源码、`tsconfig.json` 等开发文件
+
+#### 4. 欢迎信息
+- 插件加载时在控制台输出版本信息、类型定义状态和 AI Skills 文件位置
+
+### 版本升级
+- 版本号从 1.1.0 升级到 1.2.0
+
 ## v1.0.5 (2026-01-26)
 
 ### 🎉 重大改进

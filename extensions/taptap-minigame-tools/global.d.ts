@@ -3,6 +3,9 @@ declare namespace Editor {
     namespace App {
         const version: string;
     }
+    namespace Project {
+        const path: string;
+    }
     namespace Dialog {
         function info(message: string, options?: {
             title?: string;
