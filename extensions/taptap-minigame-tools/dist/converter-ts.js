@@ -46,9 +46,8 @@ const fs = __importStar(require("fs-extra"));
 const path = __importStar(require("path"));
 const archiver_1 = __importDefault(require("archiver"));
 const child_process_1 = require("child_process");
-const child_process_2 = require("child_process");
 const util_1 = require("util");
-const execAsync = (0, util_1.promisify)(child_process_2.exec);
+const execAsync = (0, util_1.promisify)(child_process_1.exec);
 const CONVERTER_VERSION = "2.0.4-ts";
 const DEFAULT_COMPANY = "DefaultCompany";
 const DEFAULT_PRODUCT = "My Project";
@@ -306,37 +305,25 @@ async function ensureConverterDependencies(converterDir) {
     throw new Error(`转换器依赖安装失败（已重试${maxRetries}次）。请检查网络连接或手动安装依赖。`);
 }
 /**
- * 确保babel命令有执行权限
+ * 递归收集目录下所有 .js 文件
  */
-function ensureBabelExecutable(babelPath) {
-    try {
-        // 检查文件是否存在
-        if (!fs.existsSync(babelPath)) {
-            console.log('[Tap小游戏] ⚠️  babel文件不存在:', babelPath);
-            return;
+function collectJsFiles(dir) {
+    const results = [];
+    const entries = fs.readdirSync(dir);
+    for (const entry of entries) {
+        const fullPath = path.join(dir, entry);
+        const stat = fs.statSync(fullPath);
+        if (stat.isDirectory()) {
+            results.push(...collectJsFiles(fullPath));
         }
-        // 获取当前权限
-        const stats = fs.statSync(babelPath);
-        const mode = stats.mode;
-        // 检查是否有执行权限（所有者、组、其他用户任一有x权限）
-        const hasExecutePermission = (mode & 0o111) !== 0;
-        if (!hasExecutePermission) {
-            console.log('[Tap小游戏] ⚠️  babel文件缺少执行权限，正在修复...');
-            // 添加执行权限：755 (rwxr-xr-x)
-            fs.chmodSync(babelPath, 0o755);
-            console.log('[Tap小游戏] ✓ 已添加执行权限');
-        }
-        else {
-            console.log('[Tap小游戏] ✓ babel文件权限正常');
+        else if (entry.endsWith('.js')) {
+            results.push(fullPath);
         }
     }
-    catch (error) {
-        console.log('[Tap小游戏] ⚠️  权限检查失败:', error.message);
-        // 不抛出错误，继续尝试执行
-    }
+    return results;
 }
 /**
- * 步骤6: 运行Babel转换
+ * 步骤6: 运行Babel转换（使用 @babel/core Node.js API）
  */
 async function runBabelTransform(targetFolder, converterDir) {
     console.log('[Tap小游戏] 正在进行JavaScript兼容性转换...');
@@ -346,62 +333,69 @@ async function runBabelTransform(targetFolder, converterDir) {
         console.log('[Tap小游戏] ✓ Babel已转换，跳过');
         return;
     }
-    // 执行Babel转换
+    // 加载 @babel/core
+    const babelCorePath = path.join(converterDir, 'node_modules', '@babel', 'core');
+    let babel;
+    try {
+        babel = require(babelCorePath);
+    }
+    catch (error) {
+        throw new Error(`加载 @babel/core 失败: ${error.message}\n请在 ${converterDir} 目录下执行 npm install`);
+    }
+    // 读取 .babelrc 配置
     const babelrcPath = path.join(converterDir, '.babelrc');
     console.log('[Tap小游戏] Babel配置:', babelrcPath);
     console.log('[Tap小游戏] 转换目录:', targetFolder);
-    // 使用本地安装的babel-cli（兼容Windows）
-    const babelPath = path.join(converterDir, 'node_modules', '.bin', 'babel');
-    const isWindows = process.platform === 'win32';
-    const babelCmd = isWindows ? babelPath + '.cmd' : babelPath;
-    console.log('[Tap小游戏] Babel命令:', babelCmd);
-    // 检查并修复babel执行权限（非Windows系统）
-    if (!isWindows) {
-        ensureBabelExecutable(babelCmd);
+    let babelConfig;
+    try {
+        babelConfig = fs.readJsonSync(babelrcPath);
     }
-    console.log('[Tap小游戏] 正在执行转换...');
-    await new Promise((resolve, reject) => {
-        const child = (0, child_process_1.spawn)(babelCmd, ['--config-file', babelrcPath, targetFolder, '-d', targetFolder], {
-            cwd: converterDir,
-            stdio: 'pipe',
-            shell: isWindows
-        });
-        let stdoutData = '';
-        let stderrData = '';
-        child.stdout.on('data', (data) => {
-            const output = data.toString();
-            stdoutData += output;
-            const trimmed = output.trim();
-            if (trimmed)
-                console.log('[Babel]', trimmed);
-        });
-        child.stderr.on('data', (data) => {
-            const output = data.toString();
-            stderrData += output;
-            const trimmed = output.trim();
-            // 不要使用console.error，因为在Cocos Creator中会导致构建中断
-            // Babel的stderr可能只是警告，不一定是错误
-            if (trimmed)
-                console.log('[Babel stderr]', trimmed);
-        });
-        child.on('close', (code) => {
-            if (code === 0) {
-                console.log('[Tap小游戏] ✓ Babel转换完成');
-                resolve();
+    catch (error) {
+        throw new Error(`读取 .babelrc 失败: ${error.message}`);
+    }
+    // 从 .babelrc 中提取 ignore 列表
+    const ignoreFiles = babelConfig.ignore || [];
+    // 构建 transformFileSync 的配置（解析 preset 路径到 converter 的 node_modules 下）
+    const transformConfig = {
+        sourceType: babelConfig.sourceType || 'unambiguous',
+        presets: (babelConfig.presets || []).map((preset) => {
+            if (typeof preset === 'string') {
+                return require.resolve(path.join(converterDir, 'node_modules', `@babel/preset-${preset}`));
             }
-            else {
-                const errorMsg = stderrData || stdoutData || '未知错误';
-                console.log('[Tap小游戏] X 转换失败：');
-                console.log('[Tap小游戏] 错误详情：', errorMsg);
-                reject(new Error(`Babel转换失败（退出码: ${code}）\n${errorMsg}`));
+            return preset;
+        }),
+    };
+    // 收集所有 .js 文件
+    const jsFiles = collectJsFiles(targetFolder);
+    console.log(`[Tap小游戏] 发现 ${jsFiles.length} 个JS文件需要转换`);
+    let successCount = 0;
+    let skipCount = 0;
+    let errorCount = 0;
+    for (const filePath of jsFiles) {
+        const fileName = path.basename(filePath);
+        // 跳过 ignore 列表中的文件
+        if (ignoreFiles.includes(fileName)) {
+            skipCount++;
+            console.log(`[Babel] 跳过: ${fileName}`);
+            continue;
+        }
+        try {
+            const result = babel.transformFileSync(filePath, transformConfig);
+            if (result && result.code != null) {
+                fs.writeFileSync(filePath, result.code, 'utf-8');
+                successCount++;
             }
-        });
-        child.on('error', (error) => {
-            console.log('[Tap小游戏] X 转换失败：');
-            console.log('[Tap小游戏] 错误详情：', error.message);
-            reject(new Error(`启动Babel进程失败: ${error.message}`));
-        });
-    });
+        }
+        catch (error) {
+            errorCount++;
+            console.log(`[Babel] 转换失败: ${fileName} - ${error.message}`);
+        }
+    }
+    console.log(`[Tap小游戏] Babel转换完成: 成功 ${successCount}, 跳过 ${skipCount}, 失败 ${errorCount}`);
+    if (errorCount > 0 && successCount === 0) {
+        throw new Error(`Babel转换全部失败（${errorCount}个文件）`);
+    }
+    console.log('[Tap小游戏] ✓ Babel转换完成');
 }
 /**
  * 步骤8: 注入运行时代码到game.js

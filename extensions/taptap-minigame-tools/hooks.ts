@@ -89,7 +89,7 @@ function checkConverterDependencies(): { ok: boolean; message: string } {
     const converterDir = path.join(__dirname, '..', 'converter');
     const nodeModulesPath = path.join(converterDir, 'node_modules');
     const packageJsonPath = path.join(converterDir, 'package.json');
-    const babelPath = path.join(nodeModulesPath, '.bin', 'babel');
+    const babelCorePath = path.join(nodeModulesPath, '@babel', 'core', 'lib', 'index.js');
 
     console.log('[Tap小游戏] 检查转换器依赖...');
     console.log('[Tap小游戏] converter目录:', converterDir);
@@ -114,18 +114,15 @@ function checkConverterDependencies(): { ok: boolean; message: string } {
     }
     console.log('[Tap小游戏] ✓ node_modules存在');
 
-    // 检查babel命令（Windows检查.cmd，其他检查普通文件）
-    const isWindows = process.platform === 'win32';
-    const babelCmdPath = isWindows ? babelPath + '.cmd' : babelPath;
-
-    if (!fs.existsSync(babelCmdPath)) {
-        console.log('[Tap小游戏] ✗ babel命令不存在:', babelCmdPath);
+    // 检查 @babel/core 模块是否安装
+    if (!fs.existsSync(babelCorePath)) {
+        console.log('[Tap小游戏] ✗ @babel/core未安装:', babelCorePath);
         return {
             ok: false,
-            message: 'Babel转换工具未安装。\n\n首次使用会自动安装，请稍候1-2分钟。'
+            message: '@babel/core未安装。\n\n首次使用会自动安装，请稍候1-2分钟。'
         };
     }
-    console.log('[Tap小游戏] ✓ babel命令存在');
+    console.log('[Tap小游戏] ✓ @babel/core已安装');
 
     return {
         ok: true,
