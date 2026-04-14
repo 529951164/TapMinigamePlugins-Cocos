@@ -390,7 +390,9 @@ async function runBabelTransform(targetFolder: string, converterDir: string): Pr
         sourceType: babelConfig.sourceType || 'unambiguous',
         presets: (babelConfig.presets || []).map((preset: string | any[]) => {
             if (typeof preset === 'string') {
-                return require.resolve(path.join(converterDir, 'node_modules', `@babel/preset-${preset}`));
+                // preset 可能是完整名称如 "@babel/preset-env"，也可能是短名如 "env"
+                const presetName = preset.startsWith('@babel/') ? preset : `@babel/preset-${preset}`;
+                return require.resolve(presetName, { paths: [converterDir] });
             }
             return preset;
         }),
@@ -411,6 +413,13 @@ async function runBabelTransform(targetFolder: string, converterDir: string): Pr
         if (ignoreFiles.includes(fileName)) {
             skipCount++;
             console.log(`[Babel] 跳过: ${fileName}`);
+            continue;
+        }
+
+        // 跳过 Cocos 引擎文件（cc.HASH.js），这些文件很大且不需要转换
+        if (/^cc\.[a-f0-9]+\.js$/.test(fileName)) {
+            skipCount++;
+            console.log(`[Babel] 跳过引擎文件: ${fileName}`);
             continue;
         }
 
